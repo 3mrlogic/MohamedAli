@@ -29,6 +29,7 @@ button,input,select,textarea{font-family:inherit;font-size:14px;color:inherit}
 .login-err{color:var(--red);font-size:12px;text-align:center;min-height:18px;margin-bottom:8px}
 .login-alt{text-align:center;font-size:12px;color:var(--muted);margin-top:16px;cursor:pointer}
 .login-alt b{color:var(--accent)}
+.login-hint{font-size:11px;color:#9aa4b0;margin-top:6px;line-height:1.6}
 
 /* ---------- الهيكل ---------- */
 header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
@@ -207,16 +208,19 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
     <div class="login-title">نظام إدارة الطلبة</div>
     <div class="login-sub" id="login-sub">تسجيل الدخول مرة واحدة فقط</div>
     <div id="setup-form" style="display:none">
-      <div class="fld"><label>البريد الإلكتروني للمدرسة (المُرسِل)</label><input id="su-email" type="email" placeholder="admin@school.ae"></div>
-      <div class="fld"><label>كلمة مرور تطبيقات Gmail</label><input id="su-smtp" type="password" placeholder="xxxx xxxx xxxx xxxx"></div>
-      <div class="fld"><label>كود الدخول (اختر كوداً خاصاً بك)</label><input id="su-code" type="password" placeholder="••••••••"></div>
+      <div class="fld"><label>بريد المدرسة على Gmail</label><input id="su-email" type="email" placeholder="school@gmail.com"></div>
+      <div class="fld"><label>كلمة مرور تطبيقات Gmail</label>
+        <input id="su-smtp" type="password" placeholder="xxxx xxxx xxxx xxxx" onkeydown="if(event.key==='Enter')doSetup()">
+        <div class="login-hint">١٦ حرفاً من Google — وهي نفسها التي تدخل بها لاحقاً</div>
+      </div>
       <div class="login-err" id="su-err"></div>
       <button class="btn" style="width:100%" onclick="doSetup()">حفظ وبدء الاستخدام</button>
       <div class="login-alt" onclick="showLogin()">لديك إعداد سابق؟ <b>تسجيل الدخول</b></div>
     </div>
     <div id="login-form" style="display:none">
-      <div class="fld"><label>البريد الإلكتروني</label><input id="lg-email" type="email" placeholder="admin@school.ae"></div>
-      <div class="fld"><label>كود الدخول</label><input id="lg-code" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="fld"><label>بريد المدرسة</label><input id="lg-email" type="email" placeholder="school@gmail.com"></div>
+      <div class="fld"><label>كلمة مرور تطبيقات Gmail</label>
+        <input id="lg-code" type="password" placeholder="xxxx xxxx xxxx xxxx" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <div class="login-err" id="lg-err"></div>
       <button class="btn" style="width:100%" onclick="doLogin()">دخول</button>
       <div class="login-alt" onclick="showSetup()">إعداد جديد؟ <b>ابدأ الإعداد</b></div>
@@ -570,21 +574,21 @@ function showLogin(){
   document.getElementById('login-sub').textContent='تسجيل الدخول — يبقى الدخول محفوظاً';
 }
 async function doSetup(){
-  const email=$('su-email').value.trim(), smtp=$('su-smtp').value.trim(), code=$('su-code').value.trim();
-  if(!email||!code){ $('su-err').textContent='أدخل البريد والكود'; return; }
-  const r=await api('/api/auth/setup',{method:'POST',body:JSON.stringify({email,smtp_password:smtp,code})});
+  const email=$('su-email').value.trim(), smtp=$('su-smtp').value.trim();
+  if(!email||!smtp){ $('su-err').textContent='أدخل البريد وكلمة مرور التطبيقات'; return; }
+  const r=await api('/api/auth/setup',{method:'POST',body:JSON.stringify({email,smtp_password:smtp})});
   if(r.error){ $('su-err').textContent=r.error; return; }
-  document.getElementById('login-screen').classList.add('hidden'); initApp();
+  $('login-screen').classList.add('hidden'); initApp();
 }
 async function doLogin(){
-  const email=$('lg-email').value.trim(), code=$('lg-code').value.trim();
-  if(!email||!code){ $('lg-err').textContent='أدخل البريد والكود'; return; }
-  const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,code})});
+  const email=$('lg-email').value.trim(), pw=$('lg-code').value.trim();
+  if(!email||!pw){ $('lg-err').textContent='أدخل البريد وكلمة المرور'; return; }
+  const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:pw})});
   if(r.error){ $('lg-err').textContent=r.error; return; }
-  document.getElementById('login-screen').classList.add('hidden'); initApp();
+  $('login-screen').classList.add('hidden'); initApp();
 }
 async function doLogout(){
-  if(!confirm('سيتم تسجيل الخروج وستحتاج لإدخال الكود مرة أخرى. متابعة؟')) return;
+  if(!confirm('سيتم تسجيل الخروج وستحتاج لإدخال كلمة مرور التطبيقات مرة أخرى. متابعة؟')) return;
   await api('/api/auth/logout',{method:'POST'}); location.reload();
 }
 

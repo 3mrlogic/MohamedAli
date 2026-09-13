@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
-import json, os, smtplib, uuid, secrets, html as html_lib
+import json, os, smtplib, uuid, secrets, hmac, html as html_lib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -135,15 +135,15 @@ def login_required(f):
 
 @app.route("/api/auth/setup", methods=["POST"])
 def auth_setup():
+    """الإعداد الأول: البريد وكلمة مرور تطبيقات Gmail فقط — لا يوجد كود منفصل."""
     d = request.json
     email = d.get("email", "").strip().lower()
-    code  = d.get("code", "").strip()
     smtp_pass = d.get("smtp_password", "").strip()
-    if not email or not code:
-        return jsonify({"error": "البريد والكود مطلوبان"}), 400
+    if not email or not smtp_pass:
+        return jsonify({"error": "البريد وكلمة مرور تطبيقات Gmail مطلوبان"}), 400
     db = load_db()
     old = db.get("auth") or {}
-    db["auth"] = {"email": email, "code": code, "smtp_password": smtp_pass,
+    db["auth"] = {"email": email, "smtp_password": smtp_pass,
                   "session_token": old.get("session_token") or secrets.token_hex(16)}
     save_db(db)
     start_session(email, db)
@@ -151,15 +151,30 @@ def auth_setup():
 
 @app.route("/api/auth/login", methods=["POST"])
 def auth_login():
+    """الدخول بكلمة مرور تطبيقات Gmail نفسها."""
     d = request.json
     email = d.get("email", "").strip().lower()
-    code  = d.get("code", "").strip()
+    pw    = (d.get("password") or d.get("smtp_password") or d.get("code") or "").strip()
     db = load_db()
     auth = db.get("auth")
     if not auth:
         return jsonify({"error": "لم يتم الإعداد بعد", "needs_setup": True}), 400
-    if email != auth["email"] or code != auth["code"]:
-        return jsonify({"error": "البريد الإلكتروني أو الكود غير صحيح"}), 401
+
+    stored = auth.get("smtp_password") or ""
+
+    def same(a, b):
+        # المقارنة بزمن ثابت حتى لا تُخمَّن كلمة المرور حرفاً حرفاً.
+        # لا بد من الترميز إلى bytes وإلا رُفض أي محرف غير إنجليزي باستثناء.
+        return hmac.compare_digest(str(a).encode("utf-8"), str(b).encode("utf-8"))
+
+    same_mail = same(email, (auth.get("email") or "").lower())
+    same_pw   = bool(stored) and same(pw, stored)
+    # المسافات في كلمة مرور تطبيقات Google اختيارية (xxxx xxxx xxxx xxxx)
+    if not same_pw and stored:
+        same_pw = same(pw.replace(" ", ""), stored.replace(" ", ""))
+    if not (same_mail and same_pw):
+        return jsonify({"error": "البريد أو كلمة المرور غير صحيحة"}), 401
+
     start_session(email, db)
     return jsonify({"success": True})
 
