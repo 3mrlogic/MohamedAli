@@ -22,86 +22,116 @@ SECRET_FILE = os.path.join(BASE_DIR, ".secret_key")
 
 USING_POSTGRES = bool(DB_URL)
 
+# يُعاد استخدام الاتصال داخل نفس النسخة الدافئة من الدالة (Vercel يُبقيها حيّة
+# بين الطلبات)، وتُنشأ الجداول مرة واحدة فقط — كل مصافحة TLS أو CREATE TABLE
+# زائدة تعني رحلة ذهاب وإياب إضافية إلى القاعدة.
+_conn = None
+_schema_ready = False
+
 
 # ───────────────────────────── Postgres ─────────────────────────────
-def _connect():
-    import psycopg2
+def _dsn():
     url = DB_URL
     if "sslmode=" not in url:
         url += ("&" if "?" in url else "?") + "sslmode=require"
-    return psycopg2.connect(url, connect_timeout=10)
+    return url
 
 
-def _init_schema(cur):
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS app_state (
-            id         INT PRIMARY KEY,
-            doc        JSONB NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )""")
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS app_meta (
-            k TEXT PRIMARY KEY,
-            v TEXT NOT NULL
-        )""")
+def _get_conn(fresh=False):
+    global _conn, _schema_ready
+    import psycopg2
+    if fresh and _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+        _conn = None
+        _schema_ready = False          # اتصال جديد ⇐ تحقّق من الجداول مرة أخرى
+
+    if _conn is None or getattr(_conn, "closed", 0):
+        _conn = psycopg2.connect(_dsn(), connect_timeout=10)
+        try:
+            _conn.autocommit = True
+        except Exception:
+            pass
+        _schema_ready = False
+    return _conn
+
+
+def _ensure_schema(conn):
+    global _schema_ready
+    if _schema_ready:
+        return
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_state (
+                id         INT PRIMARY KEY,
+                doc        JSONB NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )""")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_meta (
+                k TEXT PRIMARY KEY,
+                v TEXT NOT NULL
+            )""")
+    _schema_ready = True
+
+
+def _exec(fn):
+    """
+    يشغّل fn(cur) على اتصال مُعاد استخدامه.
+    لو كان الاتصال قد انقطع (نوم الـcompute أو انتهاء المهلة) يُعاد الاتصال ويُحاول مرة أخرى.
+    """
+    import psycopg2
+    for attempt in (0, 1):
+        try:
+            conn = _get_conn(fresh=(attempt == 1))
+            _ensure_schema(conn)
+            with conn.cursor() as cur:
+                return fn(cur)
+        except psycopg2.Error:
+            if attempt == 1:      # فشلت المحاولة الثانية على اتصال جديد
+                raise
 
 
 def init_db():
-    """ينشئ الجداول إن لم تكن موجودة — يُستدعى مرة واحدة."""
+    """ينشئ الجداول إن لم تكن موجودة."""
     if not USING_POSTGRES:
         return False
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            _init_schema(cur)
-        conn.commit()
+    _exec(lambda cur: None)
     return True
 
 
 def _pg_read():
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            _init_schema(cur)
-            cur.execute("SELECT doc FROM app_state WHERE id = 1")
-            row = cur.fetchone()
-        conn.commit()
-    return row[0] if row else None
+    def run(cur):
+        cur.execute("SELECT doc FROM app_state WHERE id = 1")
+        row = cur.fetchone()
+        return row[0] if row else None
+    return _exec(run)
 
 
 def _pg_write(doc):
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            _init_schema(cur)
-            cur.execute("""
-                INSERT INTO app_state (id, doc) VALUES (1, %s::jsonb)
-                ON CONFLICT (id) DO UPDATE
-                  SET doc = EXCLUDED.doc, updated_at = now()
-            """, (json.dumps(doc, ensure_ascii=False),))
-        conn.commit()
-
-
-def _pg_meta_get(key):
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            _init_schema(cur)
-            cur.execute("SELECT v FROM app_meta WHERE k = %s", (key,))
-            row = cur.fetchone()
-        conn.commit()
-    return row[0] if row else None
+    payload = json.dumps(doc, ensure_ascii=False)
+    def run(cur):
+        cur.execute("""
+            INSERT INTO app_state (id, doc) VALUES (1, %s::jsonb)
+            ON CONFLICT (id) DO UPDATE
+              SET doc = EXCLUDED.doc, updated_at = now()
+        """, (payload,))
+    _exec(run)
 
 
 def _pg_meta_set_once(key, value):
     """يكتب القيمة فقط إن لم تكن موجودة، ويُرجع القيمة النهائية المخزَّنة."""
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            _init_schema(cur)
-            cur.execute("""
-                INSERT INTO app_meta (k, v) VALUES (%s, %s)
-                ON CONFLICT (k) DO NOTHING
-            """, (key, value))
-            cur.execute("SELECT v FROM app_meta WHERE k = %s", (key,))
-            row = cur.fetchone()
-        conn.commit()
-    return row[0] if row else value
+    def run(cur):
+        cur.execute("""
+            INSERT INTO app_meta (k, v) VALUES (%s, %s)
+            ON CONFLICT (k) DO NOTHING
+        """, (key, value))
+        cur.execute("SELECT v FROM app_meta WHERE k = %s", (key,))
+        row = cur.fetchone()
+        return row[0] if row else value
+    return _exec(run)
 
 
 # ───────────────────────────── ملف محلي ─────────────────────────────
