@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
 import json, os, smtplib, uuid, secrets, html as html_lib
 from email.mime.text import MIMEText
@@ -70,6 +70,14 @@ DEFAULT_DB = {
 
 # ====================== قاعدة البيانات ======================
 def load_db():
+    """
+    يقرأ المستند مرة واحدة فقط لكل طلب.
+    بدون هذا التخزين المؤقت يُقرأ المستند مرتين أو ثلاثاً في الطلب الواحد
+    (مرة للتحقق من الجلسة ومرة للمعالج)، وهو ما يُبطئ العمل مع قاعدة بعيدة.
+    """
+    if has_request_context() and "db_doc" in g.__dict__:
+        return g.db_doc
+
     db = storage.read_doc()
     if db is None:
         db = json.loads(json.dumps(DEFAULT_DB))
@@ -84,10 +92,14 @@ def load_db():
     db.setdefault("custom_templates", {})
     for k, v in DEFAULT_SETTINGS.items():
         db["settings"].setdefault(k, v)
+    if has_request_context():
+        g.db_doc = db
     return db
 
 def save_db(data):
     storage.write_doc(data)
+    if has_request_context():
+        g.db_doc = data
 
 def gen_id(): return str(uuid.uuid4())[:8]
 
