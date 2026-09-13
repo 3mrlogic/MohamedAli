@@ -542,6 +542,8 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 
 <script>
 /* ============ أدوات ============ */
+const $ = id => document.getElementById(id);
+
 async function api(path, opts={}){
   const r = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'include', ...opts});
   return r.json();
@@ -560,25 +562,25 @@ async function checkAuth(){
   else if(!s.has_setup) showSetup(); else showLogin();
 }
 function showSetup(){
-  setup_form.style.display='block'; login_form.style.display='none';
+  $('setup-form').style.display='block'; $('login-form').style.display='none';
   document.getElementById('login-sub').textContent='الإعداد الأول — مرة واحدة فقط';
 }
 function showLogin(){
-  setup_form.style.display='none'; login_form.style.display='block';
+  $('setup-form').style.display='none'; $('login-form').style.display='block';
   document.getElementById('login-sub').textContent='تسجيل الدخول — يبقى الدخول محفوظاً';
 }
 async function doSetup(){
-  const email=su_email.value.trim(), smtp=su_smtp.value.trim(), code=su_code.value.trim();
-  if(!email||!code){ su_err.textContent='أدخل البريد والكود'; return; }
+  const email=$('su-email').value.trim(), smtp=$('su-smtp').value.trim(), code=$('su-code').value.trim();
+  if(!email||!code){ $('su-err').textContent='أدخل البريد والكود'; return; }
   const r=await api('/api/auth/setup',{method:'POST',body:JSON.stringify({email,smtp_password:smtp,code})});
-  if(r.error){ su_err.textContent=r.error; return; }
+  if(r.error){ $('su-err').textContent=r.error; return; }
   document.getElementById('login-screen').classList.add('hidden'); initApp();
 }
 async function doLogin(){
-  const email=lg_email.value.trim(), code=lg_code.value.trim();
-  if(!email||!code){ lg_err.textContent='أدخل البريد والكود'; return; }
+  const email=$('lg-email').value.trim(), code=$('lg-code').value.trim();
+  if(!email||!code){ $('lg-err').textContent='أدخل البريد والكود'; return; }
   const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,code})});
-  if(r.error){ lg_err.textContent=r.error; return; }
+  if(r.error){ $('lg-err').textContent=r.error; return; }
   document.getElementById('login-screen').classList.add('hidden'); initApp();
 }
 async function doLogout(){
@@ -618,8 +620,8 @@ function fillClassSelect(sel,first){
 /* ============ الرئيسية ============ */
 async function loadStats(){
   const s=await api('/api/stats'); if(s.error) return;
-  d_s.textContent=s.total_students; d_c.textContent=s.total_classes;
-  d_a.textContent=s.avg_per_class;  d_v.textContent=s.total_violations;
+  $('d-s').textContent=s.total_students; $('d-c').textContent=s.total_classes;
+  $('d-a').textContent=s.avg_per_class;  $('d-v').textContent=s.total_violations;
 }
 async function loadDash(){
   await loadStats(); await refresh();
@@ -809,7 +811,7 @@ function readOpts(){
   });
 }
 function setAccent(c){
-  OPT.accent=c; accent_picker.value=c; accent_text.value=c; schedulePreview();
+  OPT.accent=c; $('accent-picker').value=c; $('accent-text').value=c; schedulePreview();
 }
 function copyVar(el){
   navigator.clipboard?.writeText(el.textContent).then(()=>toast('تم نسخ '+el.textContent)).catch(()=>{});
@@ -851,8 +853,8 @@ async function doPreview(){
 document.addEventListener('input',e=>{
   if(e.target.matches('[data-opt]')){
     const k=e.target.dataset.opt;
-    if(k==='accent'){ accent_picker.value=e.target.value; accent_text.value=e.target.value; }
-    if(k==='bg'){ bg_picker.value=e.target.value; bg_text.value=e.target.value; }
+    if(k==='accent'){ $('accent-picker').value=e.target.value; $('accent-text').value=e.target.value; }
+    if(k==='bg'){ $('bg-picker').value=e.target.value; $('bg-text').value=e.target.value; }
     schedulePreview();
   }
 });
