@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نظام إدارة الطلبة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --line:#e3e7ec; --text:#1f2a37; --muted:#6b7686;
+  --accent:#0f5b8a; --accent-soft:#eaf2f8;
+  --green:#15803d; --green-soft:#e9f6ee; --red:#b91c1c; --red-soft:#fdeceb;
+  --r:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Cairo',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.7}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font-family:inherit;font-size:14px;color:inherit}
+
+/* ---------- الدخول ---------- */
+#login-screen{position:fixed;inset:0;z-index:900;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+#login-screen.hidden{display:none}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:32px 28px}
+.login-logo{width:60px;height:60px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 14px}
+.login-title{text-align:center;font-size:18px;font-weight:700;margin-bottom:4px}
+.login-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:26px}
+.login-err{color:var(--red);font-size:12px;text-align:center;min-height:18px;margin-bottom:8px}
+.login-alt{text-align:center;font-size:12px;color:var(--muted);margin-top:16px;cursor:pointer}
+.login-alt b{color:var(--accent)}
+
+/* ---------- الهيكل ---------- */
+header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.hd-top{max-width:1400px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:12px}
+.hd-logo{width:38px;height:38px;border-radius:50%;object-fit:cover}
+.hd-name{font-weight:700;font-size:15px;line-height:1.3}
+.hd-sub{font-size:11px;color:var(--muted)}
+.hd-sp{flex:1}
+.hd-out{background:none;border:1px solid var(--line);border-radius:8px;padding:7px 14px;color:var(--muted);cursor:pointer;font-size:12px}
+.hd-out:hover{border-color:var(--red);color:var(--red)}
+nav{max-width:1400px;margin:0 auto;padding:0 12px;display:flex;gap:2px;overflow-x:auto}
+nav::-webkit-scrollbar{height:0}
+.nl{padding:11px 15px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.nl:hover{color:var(--text)}
+.nl.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+main{max-width:1400px;margin:0 auto;padding:22px 20px 60px}
+.pg{display:none}
+.pg.on{display:block}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.ph h1{font-size:19px;font-weight:700}
+.ph p{font-size:12px;color:var(--muted)}
+
+/* ---------- عناصر ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:16px}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.card-h h2{font-size:15px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.stat b{display:block;font-size:26px;font-weight:700;color:var(--accent);line-height:1.3}
+.stat span{font-size:12px;color:var(--muted)}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:600}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-line{background:none;color:var(--accent)}
+.btn-line:hover{background:var(--accent-soft)}
+.btn-gray{background:none;border-color:var(--line);color:var(--muted)}
+.btn-gray:hover{background:#f3f5f7;color:var(--text)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.fld .opt{font-size:11px;color:#9aa4b0}
+input,select,textarea{width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{min-height:100px;resize:vertical;line-height:1.8}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 16px}
+.toolbar{display:grid;grid-template-columns:1fr 220px;gap:10px;margin-bottom:14px}
+@media(max-width:620px){.toolbar{grid-template-columns:1fr}}
+
+/* ---------- الفصول ---------- */
+.classes{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px}
+.cls{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:pointer;position:relative;transition:.15s}
+.cls:hover{border-color:var(--accent);background:var(--accent-soft)}
+.cls .code{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:1px 9px;font-size:12px;font-weight:700;margin-bottom:8px}
+.cls .nm{font-size:13px;font-weight:600;line-height:1.5}
+.cls .ct{font-size:12px;color:var(--muted);margin-top:3px}
+.cls .x{position:absolute;top:8px;left:8px;border:none;background:none;color:#c3cbd4;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px}
+.cls .x:hover{color:var(--red)}
+.cls-add{border:1px dashed var(--line);border-radius:var(--r);background:none;cursor:pointer;color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;min-height:92px}
+.cls-add:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- الجداول ---------- */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:right;font-size:12px;font-weight:600;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #f1f3f5;font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfc}
+.nm-cell{font-weight:600}
+.mono{font-size:12px;color:var(--muted);direction:ltr;text-align:right;unicode-bidi:plaintext}
+.tag{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:1px 9px;font-size:12px;white-space:nowrap}
+.tag.ok{background:var(--green-soft);color:var(--green)}
+.tag.bad{background:var(--red-soft);color:var(--red)}
+.ia{border:1px solid var(--line);background:#fff;border-radius:7px;width:30px;height:30px;cursor:pointer;color:var(--muted);margin-inline-start:4px}
+.ia:hover{border-color:var(--accent);color:var(--accent)}
+.ia.del:hover{border-color:var(--red);color:var(--red)}
+mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
+
+/* ---------- القوالب ---------- */
+.tcats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tcat{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 14px;font-size:12px;color:var(--muted);cursor:pointer}
+.tcat.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.tmpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px;max-height:300px;overflow-y:auto;padding:2px}
+.tmpl{border:1px solid var(--line);border-radius:var(--r);background:#fff;padding:11px;cursor:pointer;text-align:right;transition:.15s;position:relative}
+.tmpl:hover{border-color:#c8d2dc}
+.tmpl.on{border-color:var(--accent);background:var(--accent-soft)}
+.tmpl .i{font-size:18px;line-height:1.4}
+.tmpl .l{font-size:12.5px;font-weight:600;line-height:1.5}
+.tmpl .c{font-size:11px;color:var(--muted)}
+.tmpl .x{position:absolute;top:5px;left:5px;border:none;background:none;color:#c3cbd4;cursor:pointer;font-size:12px;padding:2px}
+.tmpl .x:hover{color:var(--red)}
+.stu-list{border:1px solid var(--line);border-radius:var(--r);max-height:250px;overflow-y:auto}
+.stu{padding:9px 12px;border-bottom:1px solid #f1f3f5;cursor:pointer;display:flex;gap:10px;align-items:center}
+.stu:last-child{border-bottom:none}
+.stu:hover{background:#f7f9fb}
+.stu.on{background:var(--accent-soft)}
+.stu .n{font-size:13px;font-weight:600}
+.stu .c{font-size:11.5px;color:var(--muted)}
+.stu .no-mail{font-size:11px;color:var(--red);margin-inline-start:auto}
+.picked{background:var(--accent-soft);border:1px solid #cfe0ec;border-radius:var(--r);padding:12px 16px;margin-bottom:14px}
+.picked b{font-size:14px}
+.picked span{display:block;font-size:12px;color:var(--muted)}
+
+/* ---------- المُحرّر ---------- */
+.composer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,480px);gap:16px;align-items:start}
+@media(max-width:1100px){.composer{grid-template-columns:1fr}}
+.sec{border:1px solid var(--line);border-radius:var(--r);background:#fff;margin-bottom:10px;overflow:hidden}
+.sec>summary{
+  list-style:none;cursor:pointer;padding:12px 16px;font-size:13.5px;font-weight:600;
+  display:flex;align-items:center;gap:8px;user-select:none;
+}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary::before{content:'▸';color:var(--muted);font-size:11px;transition:.15s}
+.sec[open]>summary::before{transform:rotate(-90deg)}
+.sec[open]>summary{border-bottom:1px solid var(--line);background:#fafbfc}
+.sec-body{padding:16px}
+.sec .hint{font-size:11px;color:var(--muted);font-weight:400;margin-inline-start:auto}
+.sw{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);cursor:pointer;margin-bottom:12px}
+.sw input{width:auto;margin:0;cursor:pointer;accent-color:var(--accent);width:16px;height:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.ln{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.ln input{flex:1}
+.ln .rm{border:1px solid var(--line);background:#fff;border-radius:7px;width:32px;height:38px;flex:0 0 32px;cursor:pointer;color:var(--muted)}
+.ln .rm:hover{border-color:var(--red);color:var(--red)}
+.addline{border:1px dashed var(--line);background:none;border-radius:8px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;width:100%}
+.addline:hover{border-color:var(--accent);color:var(--accent)}
+.colorbox{display:flex;gap:8px;align-items:center}
+.colorbox input[type=color]{width:44px;height:38px;padding:2px;flex:0 0 44px;cursor:pointer}
+.swatches{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.swatches i{width:22px;height:22px;border-radius:5px;cursor:pointer;display:block;border:1px solid rgba(0,0,0,.1)}
+.vars{font-size:11.5px;color:var(--muted);background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:12px;line-height:2}
+.vars code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;direction:ltr;display:inline-block}
+.vars code:hover{border-color:var(--accent);color:var(--accent)}
+
+.preview-wrap{position:sticky;top:96px}
+.pv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.pv-head h2{font-size:14px;font-weight:700}
+.pv-state{font-size:11px;color:var(--muted)}
+.pv-frame{width:100%;height:640px;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+@media(max-width:1100px){.pv-frame{height:520px}.preview-wrap{position:static}}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* ---------- السجل ---------- */
+.log{display:flex;gap:14px;padding:13px 0;border-bottom:1px solid #f1f3f5;align-items:flex-start}
+.log:last-child{border-bottom:none}
+.log .d{font-size:11.5px;color:var(--muted);min-width:62px;padding-top:2px}
+.log .b{flex:1;min-width:0}
+.log .n{font-size:13px;font-weight:600}
+.log .m{font-size:12px;color:var(--muted)}
+
+/* ---------- نوافذ ---------- */
+.ov{position:fixed;inset:0;background:rgba(20,28,38,.5);z-index:600;display:none;align-items:center;justify-content:center;padding:16px}
+.ov.open{display:flex}
+.modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow:auto}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-act{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.pm{background:#fff;border-radius:12px;width:100%;max-width:700px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.pm-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.pm-h h3{font-size:15px;font-weight:700}
+#pm-frame{width:100%;height:64vh;border:none;background:#fff}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:#1f2a37;color:#fff;border-radius:8px;padding:10px 20px;font-size:13px;z-index:800;opacity:0;transition:.2s;pointer-events:none;max-width:92vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--red)}
+.empty{text-align:center;color:var(--muted);padding:34px 16px;font-size:13px}
+.count{font-size:12px;color:var(--muted);margin-bottom:10px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;vertical-align:-2px;margin-inline-end:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ===== الدخول ===== -->
+<div id="login-screen">
+  <div class="login-card">
+    <img class="login-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlsLa51lTyeKI6ieC1Afuwu-3K7mTNXV-eWw&s" alt="">
+    <div class="login-title">نظام إدارة الطلبة</div>
+    <div class="login-sub" id="login-sub">تسجيل الدخول مرة واحدة فقط</div>
+    <div id="setup-form" style="display:none">
+      <div class="fld"><label>البريد الإلكتروني للمدرسة (المُرسِل)</label><input id="su-email" type="email" placeholder="admin@school.ae"></div>
+      <div class="fld"><label>كلمة مرور تطبيقات Gmail</label><input id="su-smtp" type="password" placeholder="xxxx xxxx xxxx xxxx"></div>
+      <div class="fld"><label>كود الدخول (اختر كوداً خاصاً بك)</label><input id="su-code" type="password" placeholder="••••••••"></div>
+      <div class="login-err" id="su-err"></div>
+      <button class="btn" style="width:100%" onclick="doSetup()">حفظ وبدء الاستخدام</button>
+      <div class="login-alt" onclick="showLogin()">لديك إعداد سابق؟ <b>تسجيل الدخول</b></div>
+    </div>
+    <div id="login-form" style="display:none">
+      <div class="fld"><label>البريد الإلكتروني</label><input id="lg-email" type="email" placeholder="admin@school.ae"></div>
+      <div class="fld"><label>كود الدخول</label><input id="lg-code" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="login-err" id="lg-err"></div>
+      <button class="btn" style="width:100%" onclick="doLogin()">دخول</button>
+      <div class="login-alt" onclick="showSetup()">إعداد جديد؟ <b>ابدأ الإعداد</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== الواجهة ===== -->
+<header>
+  <div class="hd-top">
+    <img class="hd-logo" id="hd-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlsLa51lTyeKI6ieC1Afuwu-3K7mTNXV-eWw&s" alt="">
+    <div>
+      <div class="hd-name" id="hd-name">أكاديمية الفجيرة العلمية الإسلامية</div>
+      <div class="hd-sub">نظام إدارة الطلبة والرسائل</div>
+    </div>
+    <div class="hd-sp"></div>
+    <button class="hd-out" onclick="doLogout()">تسجيل الخروج</button>
+  </div>
+  <nav>
+    <div class="nl on" onclick="go('dash')">الرئيسية</div>
+    <div class="nl" onclick="go('classes')">الفصول</div>
+    <div class="nl" onclick="go('students')">الطلبة</div>
+    <div class="nl" onclick="go('add')">إضافة طالب</div>
+    <div class="nl" onclick="go('violation')">إرسال رسالة</div>
+    <div class="nl" onclick="go('log')">السجل</div>
+    <div class="nl" onclick="go('settings')">الإعدادات</div>
+  </nav>
+</header>
+
+<main>
+
+  <!-- الرئيسية -->
+  <div class="pg on" id="pg-dash">
+    <div class="stats">
+      <div class="stat"><b id="d-s">—</b><span>إجمالي الطلبة</span></div>
+      <div class="stat"><b id="d-c">—</b><span>عدد الفصول</span></div>
+      <div class="stat"><b id="d-a">—</b><span>متوسط الفصل</span></div>
+      <div class="stat"><b id="d-v">—</b><span>الرسائل المُرسلة</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>الفصول</h2><button class="btn btn-line btn-sm" onclick="go('classes')">عرض الكل</button></div>
+      <div class="classes" id="d-cls"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>آخر الرسائل</h2><button class="btn btn-line btn-sm" onclick="go('log')">السجل الكامل</button></div>
+      <div id="d-log"></div>
+    </div>
+  </div>
+
+  <!-- الفصول -->
+  <div class="pg" id="pg-classes">
+    <div class="ph"><div><h1>الفصول</h1><p>اضغط على أي فصل لعرض طلبته</p></div><button class="btn" onclick="openCM()">+ فصل جديد</button></div>
+    <div class="classes" id="cls-grid"></div>
+    <div class="card" id="cls-det" style="display:none;margin-top:16px">
+      <div class="card-h"><h2 id="cls-det-t"></h2><button class="btn btn-gray btn-sm" onclick="document.getElementById('cls-det').style.display='none'">إغلاق</button></div>
+      <div id="cls-det-b"></div>
+    </div>
+  </div>
+
+  <!-- الطلبة -->
+  <div class="pg" id="pg-students">
+    <div class="ph"><div><h1>الطلبة</h1><p>بحث بالاسم أو الهاتف أو البريد</p></div></div>
+    <div class="card">
+      <div class="toolbar">
+        <input id="st-q" placeholder="ابحث عن طالب..." oninput="renderStudents()">
+        <select id="st-cls" onchange="renderStudents()"><option value="">كل الفصول</option></select>
+      </div>
+      <div class="count" id="st-count"></div>
+      <div id="st-body"></div>
+    </div>
+  </div>
+
+  <!-- إضافة طالب -->
+  <div class="pg" id="pg-add">
+    <div class="ph"><div><h1>إضافة طالب</h1><p>الحقول المعلّمة بـ * إلزامية</p></div></div>
+    <div class="card">
+      <div class="grid2">
+        <div class="fld"><label>الاسم الكامل *</label><input id="sn" placeholder="محمد أحمد العلي"></div>
+        <div class="fld"><label>الفصل *</label><select id="sc"><option value="">— اختر الفصل —</option></select></div>
+        <div class="fld"><label>بريد ولي الأمر <span class="opt">(اختياري)</span></label><input id="se" type="email" placeholder="parent@mail.com"></div>
+        <div class="fld"><label>الهاتف <span class="opt">(اختياري)</span></label><input id="sp" placeholder="9715xxxxxxxx"></div>
+        <div class="fld"><label>هاتف آخر <span class="opt">(اختياري)</span></label><input id="sp2" placeholder="9715xxxxxxxx"></div>
+      </div>
+      <button class="btn" id="add-btn" onclick="addStudent()">حفظ الطالب</button>
+    </div>
+  </div>
+
+  <!-- ===== إرسال رسالة ===== -->
+  <div class="pg" id="pg-violation">
+    <div class="ph"><div><h1>إرسال رسالة</h1><p>اختر قالباً جاهزاً ثم عدّل أي تفصيلة تريدها قبل الإرسال</p></div></div>
+
+    <div class="card">
+      <div class="card-h"><h2>١ — اختر القالب</h2><span class="pv-state" id="tmpl-count"></span></div>
+      <div class="tcats" id="tcats"></div>
+      <div class="tmpls" id="tmpls"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h2>٢ — اختر الطالب</h2></div>
+      <div class="toolbar">
+        <input id="v-q" placeholder="ابحث عن الطالب..." oninput="renderPicker()">
+        <select id="v-cls" onchange="renderPicker()"><option value="">كل الفصول</option></select>
+      </div>
+      <div class="stu-list" id="v-list"></div>
+      <div class="picked" id="v-picked" style="display:none;margin-top:14px"><b id="v-name"></b><span id="v-info"></span></div>
+    </div>
+
+    <div class="card-h" style="margin:22px 0 12px"><h2 style="font-size:15px;font-weight:700">٣ — تحكّم كامل في الرسالة</h2>
+      <button class="btn btn-gray btn-sm" onclick="resetToTemplate()">إعادة نص القالب</button>
+    </div>
+
+    <div class="composer">
+      <!-- المحرر -->
+      <div>
+        <div class="vars">
+          المتغيّرات (اضغط للنسخ):
+          <code onclick="copyVar(this)">{student}</code>
+          <code onclick="copyVar(this)">{class}</code>
+          <code onclick="copyVar(this)">{school}</code>
+          <code onclick="copyVar(this)">{date}</code>
+          <code onclick="copyVar(this)">{phone}</code>
+          <code onclick="copyVar(this)">{email}</code>
+        </div>
+
+        <details class="sec" open><summary>موضوع الرسالة والألوان</summary><div class="sec-body">
+          <div class="fld"><label>موضوع الإيميل (Subject)</label><input data-opt="subject"></div>
+          <label class="sw"><input type="checkbox" id="append-name" checked> إضافة اسم الطالب في نهاية الموضوع</label>
+          <div class="row">
+            <div class="fld"><label>اللون الأساسي</label>
+              <div class="colorbox"><input type="color" data-opt="accent" id="accent-picker"><input data-opt="accent" id="accent-text"></div>
+              <div class="swatches" id="swatches"></div>
+            </div>
+            <div class="fld"><label>لون خلفية الرسالة</label>
+              <div class="colorbox"><input type="color" data-opt="bg" id="bg-picker"><input data-opt="bg" id="bg-text"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="fld"><label>حجم الخط (px)</label><input type="number" data-opt="fontSize" min="11" max="20"></div>
+            <div class="fld"><label>&nbsp;</label><label class="sw"><input type="checkbox" data-opt="showBars"> إظهار الشريطين الملوّنين</label></div>
+          </div>
+        </div></details>
+
+        <details class="sec"><summary>ترويسة المدرسة<span class="hint">الشعار · الاسم · التاريخ</span></summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showLogo"> إظهار الشعار</label>
+          <div class="fld"><label>رابط الشعار</label><input data-opt="logoUrl" dir="ltr"></div>
+          <div class="fld"><label>اسم المدرسة</label><input data-opt="schoolName"></div>
+          <div class="fld"><label>سطر تحت الاسم</label><input data-opt="headerNote"></div>
+          <label class="sw"><input type="checkbox" data-opt="showDate"> إظهار التاريخ</label>
+          <div class="fld"><label>نص التاريخ</label><input data-opt="dateText"></div>
+        </div></details>
+
+        <details class="sec"><summary>شارة نوع الرسالة</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showBadge"> إظهار الشارة</label>
+          <div class="row">
+            <div class="fld"><label>الأيقونة</label><input data-opt="badgeIcon"></div>
+            <div class="fld"><label>التصنيف</label><input data-opt="badgeCat"></div>
+          </div>
+          <div class="fld"><label>عنوان الشارة</label><input data-opt="badgeLabel"></div>
+        </div></details>
+
+        <details class="sec"><summary>بطاقة الطالب</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showStudent"> إظهار بطاقة الطالب</label>
+          <label class="sw"><input type="checkbox" data-opt="showAvatar"> إظهار الحرف الأول في دائرة</label>
+          <div class="row">
+            <div class="fld"><label>اسم الطالب</label><input data-opt="studentName"></div>
+            <div class="fld"><label>الفصل</label><input data-opt="className"></div>
+          </div>
+        </div></details>
+
+        <details class="sec" open><summary>التحية والفقرة الافتتاحية</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showGreeting"> إظهار هذا الجزء</label>
+          <div class="fld"><label>التحية</label><input data-opt="greeting"></div>
+          <div class="fld"><label>الفقرة الافتتاحية</label><textarea data-opt="opening"></textarea></div>
+        </div></details>
+
+        <details class="sec"><summary>جدول البيانات<span class="hint">صفوف حرة</span></summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showDetails"> إظهار الجدول</label>
+          <div class="fld"><label>عنوان الجدول</label><input data-opt="detailsTitle"></div>
+          <div id="details-rows"></div>
+          <button class="addline" onclick="addDetail()">+ إضافة صف</button>
+        </div></details>
+
+        <details class="sec" open><summary>نص الرسالة الأساسي</summary><div class="sec-body">
+          <div class="fld"><label>عنوان الصندوق</label><input data-opt="messageTitle"></div>
+          <div class="fld"><label>النص</label><textarea data-opt="message" style="min-height:150px"></textarea></div>
+        </div></details>
+
+        <details class="sec"><summary>النقاط المهمة</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showPoints"> إظهار النقاط</label>
+          <div class="fld"><label>عنوان القائمة</label><input data-opt="pointsTitle"></div>
+          <div id="points-rows"></div>
+          <button class="addline" onclick="addPoint()">+ إضافة نقطة</button>
+        </div></details>
+
+        <details class="sec"><summary>الإجراء المطلوب</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showAction"> إظهار صندوق الإجراء</label>
+          <div class="fld"><label>العنوان</label><input data-opt="actionTitle"></div>
+          <div class="fld"><label>النص</label><textarea data-opt="action"></textarea></div>
+        </div></details>
+
+        <details class="sec"><summary>زر داخل الرسالة</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showButton"> إظهار الزر</label>
+          <div class="row">
+            <div class="fld"><label>نص الزر</label><input data-opt="buttonText" placeholder="تأكيد الحضور"></div>
+            <div class="fld"><label>الرابط</label><input data-opt="buttonUrl" dir="ltr" placeholder="https://"></div>
+          </div>
+        </div></details>
+
+        <details class="sec"><summary>الخاتمة والتوقيع</summary><div class="sec-body">
+          <div class="fld"><label>فقرة الختام</label><textarea data-opt="closing" style="min-height:70px"></textarea></div>
+          <label class="sw"><input type="checkbox" data-opt="showSignature"> إظهار التوقيع</label>
+          <div class="row">
+            <div class="fld"><label>الاسم</label><input data-opt="signName"></div>
+            <div class="fld"><label>الصفة</label><input data-opt="signTitle"></div>
+          </div>
+        </div></details>
+
+        <details class="sec"><summary>صندوق التواصل والتذييل</summary><div class="sec-body">
+          <label class="sw"><input type="checkbox" data-opt="showContact"> إظهار صندوق التواصل</label>
+          <div class="fld"><label>نص التواصل</label><textarea data-opt="contactText" style="min-height:70px"></textarea></div>
+          <div class="row">
+            <div class="fld"><label>هاتف المدرسة</label><input data-opt="contactPhone" dir="ltr"></div>
+            <div class="fld"><label>بريد المدرسة</label><input data-opt="contactEmail" dir="ltr"></div>
+          </div>
+          <label class="sw"><input type="checkbox" data-opt="showFooter"> إظهار التذييل</label>
+          <div class="fld"><label>نص التذييل</label><input data-opt="footerText"></div>
+        </div></details>
+      </div>
+
+      <!-- المعاينة -->
+      <div class="preview-wrap">
+        <div class="pv-head">
+          <h2>معاينة حيّة</h2>
+          <span class="pv-state" id="pv-state">—</span>
+        </div>
+        <iframe class="pv-frame" id="pv-frame" title="معاينة"></iframe>
+        <div class="actions">
+          <button class="btn" id="send-btn" onclick="sendV()">إرسال الرسالة</button>
+          <button class="btn btn-gray" onclick="openBigPreview()">تكبير المعاينة</button>
+          <button class="btn btn-line" onclick="openSaveTmpl()">حفظ كقالب</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- السجل -->
+  <div class="pg" id="pg-log">
+    <div class="ph"><div><h1>سجل الرسائل</h1><p>كل ما تم إرساله من النظام</p></div><button class="btn btn-gray btn-sm" onclick="loadLog()">تحديث</button></div>
+    <div class="card"><div id="log-body"></div></div>
+  </div>
+
+  <!-- الإعدادات -->
+  <div class="pg" id="pg-settings">
+    <div class="ph"><div><h1>الإعدادات الافتراضية</h1><p>هذه القيم تُطبَّق تلقائياً على كل رسالة جديدة</p></div>
+      <button class="btn btn-gray btn-sm" onclick="resetSettings()">استعادة الافتراضي</button></div>
+    <div class="card">
+      <div class="grid2">
+        <div class="fld"><label>اسم المدرسة</label><input data-set="schoolName"></div>
+        <div class="fld"><label>رابط الشعار</label><input data-set="logoUrl" dir="ltr"></div>
+        <div class="fld"><label>سطر تحت اسم المدرسة</label><input data-set="headerNote"></div>
+        <div class="fld"><label>التحية الافتراضية</label><input data-set="greeting"></div>
+        <div class="fld"><label>اسم المُوقِّع</label><input data-set="signName"></div>
+        <div class="fld"><label>صفة المُوقِّع</label><input data-set="signTitle"></div>
+        <div class="fld"><label>هاتف المدرسة</label><input data-set="contactPhone" dir="ltr"></div>
+        <div class="fld"><label>بريد المدرسة</label><input data-set="contactEmail" dir="ltr"></div>
+        <div class="fld"><label>عنوان جدول البيانات</label><input data-set="detailsTitle"></div>
+        <div class="fld"><label>عنوان صندوق النص</label><input data-set="messageTitle"></div>
+        <div class="fld"><label>عنوان النقاط</label><input data-set="pointsTitle"></div>
+        <div class="fld"><label>عنوان الإجراء المطلوب</label><input data-set="actionTitle"></div>
+        <div class="fld"><label>لون خلفية الرسالة</label><input data-set="bg" dir="ltr"></div>
+        <div class="fld"><label>حجم الخط (px)</label><input type="number" data-set="fontSize" min="11" max="20"></div>
+      </div>
+      <div class="fld"><label>نص التواصل</label><textarea data-set="contactText" style="min-height:70px"></textarea></div>
+      <div class="fld"><label>نص التذييل</label><input data-set="footerText"></div>
+
+      <div class="card-h" style="margin-top:18px"><h2>الأجزاء الظاهرة افتراضياً</h2></div>
+      <div class="grid2">
+        <label class="sw"><input type="checkbox" data-set="showLogo"> الشعار</label>
+        <label class="sw"><input type="checkbox" data-set="showDate"> التاريخ</label>
+        <label class="sw"><input type="checkbox" data-set="showBadge"> شارة النوع</label>
+        <label class="sw"><input type="checkbox" data-set="showStudent"> بطاقة الطالب</label>
+        <label class="sw"><input type="checkbox" data-set="showAvatar"> دائرة الحرف الأول</label>
+        <label class="sw"><input type="checkbox" data-set="showGreeting"> التحية</label>
+        <label class="sw"><input type="checkbox" data-set="showDetails"> جدول البيانات</label>
+        <label class="sw"><input type="checkbox" data-set="showPoints"> النقاط</label>
+        <label class="sw"><input type="checkbox" data-set="showAction"> الإجراء المطلوب</label>
+        <label class="sw"><input type="checkbox" data-set="showSignature"> التوقيع</label>
+        <label class="sw"><input type="checkbox" data-set="showContact"> صندوق التواصل</label>
+        <label class="sw"><input type="checkbox" data-set="showFooter"> التذييل</label>
+        <label class="sw"><input type="checkbox" data-set="showBars"> الشريطان الملوّنان</label>
+      </div>
+      <button class="btn" id="set-btn" onclick="saveSettings()">حفظ الإعدادات</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- نوافذ -->
+<div class="ov" id="pm"><div class="pm">
+  <div class="pm-h"><h3>معاينة الرسالة</h3><button class="btn btn-gray btn-sm" onclick="closePM()">إغلاق</button></div>
+  <iframe id="pm-frame" title="معاينة"></iframe>
+</div></div>
+
+<div class="ov" id="cls-modal"><div class="modal">
+  <h3>فصل جديد</h3>
+  <div class="fld"><label>اسم الفصل</label><input id="nc" placeholder="السابع - شعبة 3"></div>
+  <div class="fld"><label>الرمز المختصر</label><input id="ni" placeholder="7/3"></div>
+  <div class="modal-act"><button class="btn btn-gray" onclick="closeCM()">إلغاء</button><button class="btn" onclick="subClass()">إضافة</button></div>
+</div></div>
+
+<div class="ov" id="tmpl-modal"><div class="modal">
+  <h3>حفظ الرسالة الحالية كقالب</h3>
+  <div class="fld"><label>اسم القالب</label><input id="tm-label" placeholder="مثال: إشعار تأخر — صيغة المدرسة"></div>
+  <div class="row">
+    <div class="fld"><label>التصنيف</label><input id="tm-cat" value="قوالبي"></div>
+    <div class="fld"><label>الأيقونة</label><input id="tm-icon" value="⭐"></div>
+  </div>
+  <p style="font-size:12px;color:var(--muted)">سيُحفظ كل ما كتبته الآن (الموضوع، الافتتاحية، النص، النقاط، الإجراء، الجدول، الخاتمة واللون) كقالب جاهز تستخدمه لاحقاً.</p>
+  <div class="modal-act"><button class="btn btn-gray" onclick="closeSaveTmpl()">إلغاء</button><button class="btn" onclick="saveTmpl()">حفظ القالب</button></div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+/* ============ أدوات ============ */
+async function api(path, opts={}){
+  const r = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'include', ...opts});
+  return r.json();
+}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function toast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=(type==='err'?'err ':'')+'show';
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',3200);
+}
+
+/* ============ الدخول ============ */
+async function checkAuth(){
+  const s=await api('/api/auth/status');
+  if(s.logged_in){ document.getElementById('login-screen').classList.add('hidden'); initApp(); }
+  else if(!s.has_setup) showSetup(); else showLogin();
+}
+function showSetup(){
+  setup_form.style.display='block'; login_form.style.display='none';
+  document.getElementById('login-sub').textContent='الإعداد الأول — مرة واحدة فقط';
+}
+function showLogin(){
+  setup_form.style.display='none'; login_form.style.display='block';
+  document.getElementById('login-sub').textContent='تسجيل الدخول — يبقى الدخول محفوظاً';
+}
+async function doSetup(){
+  const email=su_email.value.trim(), smtp=su_smtp.value.trim(), code=su_code.value.trim();
+  if(!email||!code){ su_err.textContent='أدخل البريد والكود'; return; }
+  const r=await api('/api/auth/setup',{method:'POST',body:JSON.stringify({email,smtp_password:smtp,code})});
+  if(r.error){ su_err.textContent=r.error; return; }
+  document.getElementById('login-screen').classList.add('hidden'); initApp();
+}
+async function doLogin(){
+  const email=lg_email.value.trim(), code=lg_code.value.trim();
+  if(!email||!code){ lg_err.textContent='أدخل البريد والكود'; return; }
+  const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,code})});
+  if(r.error){ lg_err.textContent=r.error; return; }
+  document.getElementById('login-screen').classList.add('hidden'); initApp();
+}
+async function doLogout(){
+  if(!confirm('سيتم تسجيل الخروج وستحتاج لإدخال الكود مرة أخرى. متابعة؟')) return;
+  await api('/api/auth/logout',{method:'POST'}); location.reload();
+}
+
+/* ============ التنقل ============ */
+const PAGES=['dash','classes','students','add','violation','log','settings'];
+function go(p){
+  document.querySelectorAll('.pg').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('.nl').forEach((e,i)=>e.classList.toggle('on',PAGES[i]===p));
+  document.getElementById('pg-'+p).classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(p==='dash') loadDash();
+  if(p==='classes') loadClasses();
+  if(p==='students') loadStudentsPage();
+  if(p==='add') fillClassSelect(document.getElementById('sc'),'— اختر الفصل —');
+  if(p==='violation') loadVPage();
+  if(p==='log') loadLog();
+  if(p==='settings') loadSettings();
+}
+
+/* ============ كاش ============ */
+let CACHE={students:[],classes:[]}, SETTINGS={};
+async function refresh(){
+  const [students,classes]=await Promise.all([api('/api/students'),api('/api/classes')]);
+  CACHE.students=Array.isArray(students)?students:[];
+  CACHE.classes=Array.isArray(classes)?classes:[];
+}
+function fillClassSelect(sel,first){
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">${first}</option>`+CACHE.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  sel.value=cur;
+}
+
+/* ============ الرئيسية ============ */
+async function loadStats(){
+  const s=await api('/api/stats'); if(s.error) return;
+  d_s.textContent=s.total_students; d_c.textContent=s.total_classes;
+  d_a.textContent=s.avg_per_class;  d_v.textContent=s.total_violations;
+}
+async function loadDash(){
+  await loadStats(); await refresh();
+  document.getElementById('d-cls').innerHTML=CACHE.classes.map(c=>`
+    <div class="cls" onclick="go('classes')"><div class="code">${esc(c.icon)}</div>
+    <div class="nm">${esc(c.name)}</div><div class="ct">${c.student_count} طالب</div></div>`).join('')
+    || '<div class="empty">لا توجد فصول</div>';
+  const v=await api('/api/violations');
+  const list=Array.isArray(v)?v.slice(-5).reverse():[];
+  document.getElementById('d-log').innerHTML=list.length?list.map(logRow).join(''):'<div class="empty">لم تُرسل أي رسالة بعد</div>';
+}
+
+/* ============ الفصول ============ */
+async function loadClasses(){
+  await refresh();
+  document.getElementById('cls-grid').innerHTML=CACHE.classes.map(c=>`
+    <div class="cls" onclick="showClass('${c.id}')">
+      <button class="x" onclick="event.stopPropagation();delClass('${c.id}')">✕</button>
+      <div class="code">${esc(c.icon)}</div><div class="nm">${esc(c.name)}</div>
+      <div class="ct">${c.student_count} طالب</div></div>`).join('')
+    +`<button class="cls-add" onclick="openCM()">+ فصل جديد</button>`;
+}
+function showClass(cid){
+  const c=CACHE.classes.find(x=>x.id===cid);
+  const list=CACHE.students.filter(s=>s.classId===cid);
+  document.getElementById('cls-det-t').textContent=`${c.name} — ${list.length} طالب`;
+  document.getElementById('cls-det-b').innerHTML=list.length?stuTable(list):'<div class="empty">لا يوجد طلبة</div>';
+  const d=document.getElementById('cls-det'); d.style.display='block'; d.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function delClass(cid){
+  const c=CACHE.classes.find(x=>x.id===cid);
+  if(!confirm(`حذف «${c?c.name:''}»؟`)) return;
+  const r=await api('/api/classes/'+cid,{method:'DELETE'});
+  if(r.error){ toast(r.error,'err'); return; }
+  toast('تم حذف الفصل'); loadClasses(); loadStats();
+}
+function openCM(){ nc.value=''; ni.value=''; document.getElementById('cls-modal').classList.add('open'); }
+function closeCM(){ document.getElementById('cls-modal').classList.remove('open'); }
+async function subClass(){
+  const name=nc.value.trim(), icon=ni.value.trim()||'—';
+  if(!name){ toast('اكتب اسم الفصل','err'); return; }
+  const r=await api('/api/classes',{method:'POST',body:JSON.stringify({name,icon})});
+  if(r.error){ toast(r.error,'err'); return; }
+  toast('تمت الإضافة'); closeCM(); loadClasses(); loadStats();
+}
+
+/* ============ الطلبة ============ */
+async function loadStudentsPage(){
+  await refresh(); fillClassSelect(document.getElementById('st-cls'),'كل الفصول'); renderStudents();
+}
+function matchStu(s,q){
+  if(!q) return true;
+  return [s.name,s.phone,s.phone2,s.email,s.class_name].join(' ').toLowerCase().includes(q);
+}
+function hl(t,q){
+  const x=esc(t||''); if(!q) return x;
+  return x.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`);
+}
+function renderStudents(){
+  const q=document.getElementById('st-q').value.trim().toLowerCase();
+  const cid=document.getElementById('st-cls').value;
+  const list=CACHE.students.filter(s=>(!cid||s.classId===cid)&&matchStu(s,q));
+  document.getElementById('st-count').textContent=`${list.length} من ${CACHE.students.length} طالب`;
+  document.getElementById('st-body').innerHTML=list.length
+    ? stuTable(list.slice(0,400),q)+(list.length>400?'<div class="count" style="margin-top:10px">يتم عرض أول 400 نتيجة</div>':'')
+    : '<div class="empty">لا توجد نتائج</div>';
+}
+function stuTable(list,q){
+  return `<div class="tw"><table>
+   <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>البريد</th><th>الهاتف</th><th></th></tr></thead>
+   <tbody>${list.map((s,i)=>`<tr>
+     <td class="mono">${i+1}</td><td class="nm-cell">${hl(s.name,q)}</td>
+     <td><span class="tag">${esc(s.class_icon||'')}</span></td>
+     <td class="mono">${s.email?hl(s.email,q):'<span style="color:#b0b8c2">—</span>'}</td>
+     <td class="mono">${s.phone?hl(s.phone,q):'—'}</td>
+     <td style="white-space:nowrap">
+       <button class="ia" title="إرسال رسالة" onclick="quickV('${s.id}')">✉</button>
+       <button class="ia del" title="حذف" onclick="delStudent('${s.id}')">✕</button></td></tr>`).join('')}
+   </tbody></table></div>`;
+}
+async function delStudent(id){
+  const s=CACHE.students.find(x=>x.id===id);
+  if(!confirm(`حذف الطالب «${s?s.name:''}»؟`)) return;
+  await api('/api/students/'+id,{method:'DELETE'});
+  toast('تم الحذف'); await refresh(); loadStats();
+  if(document.getElementById('pg-students').classList.contains('on')) renderStudents(); else loadClasses();
+}
+async function addStudent(){
+  const name=sn.value.trim(),email=se.value.trim(),phone=sp.value.trim(),phone2=sp2.value.trim(),classId=sc.value;
+  if(!name||!classId){ toast('الاسم والفصل إلزاميان','err'); return; }
+  const b=document.getElementById('add-btn');
+  b.innerHTML='<span class="spin"></span>جاري الحفظ'; b.disabled=true;
+  const r=await api('/api/students',{method:'POST',body:JSON.stringify({name,email,phone,phone2,classId})});
+  b.textContent='حفظ الطالب'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  toast('تم حفظ: '+name); sn.value=se.value=sp.value=sp2.value=''; loadStats();
+}
+
+/* ============ الرسالة: الحالة ============ */
+let selStu=null, selTmpl='custom', TMPLS={}, actCat='الكل', OPT={}, pendingStu=null;
+const SWATCHES=['#0f5b8a','#c0392b','#e67e22','#27ae60','#8e44ad','#16a085','#2980b9','#d35400','#7f8c8d','#f39c12'];
+
+async function loadVPage(){
+  await refresh();
+  TMPLS=await api('/api/templates');
+  fillClassSelect(document.getElementById('v-cls'),'كل الفصول');
+  document.getElementById('swatches').innerHTML=SWATCHES.map(c=>`<i style="background:${c}" onclick="setAccent('${c}')"></i>`).join('');
+  renderCats(); renderTmpls();
+  if(pendingStu){ document.getElementById('v-q').value=''; document.getElementById('v-cls').value=''; }
+  renderPicker();
+  if(pendingStu){ const id=pendingStu; pendingStu=null; await pickS(id);
+    const el=document.querySelector(`.stu[data-id="${id}"]`); if(el) el.scrollIntoView({block:'center'}); }
+  else if(!Object.keys(OPT).length){ await loadDefaults(); }
+}
+function renderCats(){
+  const cats=['الكل',...new Set(Object.values(TMPLS).map(t=>t.cat))];
+  document.getElementById('tcats').innerHTML=cats.map(c=>
+    `<button class="tcat${c===actCat?' on':''}" onclick="pickCat('${c}')">${esc(c)}</button>`).join('');
+}
+function pickCat(c){ actCat=c; renderCats(); renderTmpls(); }
+function renderTmpls(){
+  const items=Object.entries(TMPLS).filter(([,t])=>actCat==='الكل'||t.cat===actCat);
+  document.getElementById('tmpl-count').textContent=`${Object.keys(TMPLS).length} قالب جاهز`;
+  document.getElementById('tmpls').innerHTML=items.map(([k,t])=>`
+    <div class="tmpl${k===selTmpl?' on':''}" data-k="${k}" onclick="pickT('${k}')">
+      ${t.builtin?'':`<button class="x" onclick="event.stopPropagation();delTmpl('${k}')" title="حذف">✕</button>`}
+      <div class="i">${t.icon||''}</div><div class="l">${esc(t.label)}</div><div class="c">${esc(t.cat)}</div>
+    </div>`).join('');
+}
+async function pickT(k){
+  selTmpl=k;
+  document.querySelectorAll('.tmpl').forEach(e=>e.classList.toggle('on',e.dataset.k===k));
+  await loadDefaults();
+}
+async function delTmpl(k){
+  if(!confirm('حذف هذا القالب؟')) return;
+  const r=await api('/api/templates/custom/'+k,{method:'DELETE'});
+  if(r.error){ toast(r.error,'err'); return; }
+  toast('تم حذف القالب');
+  if(selTmpl===k) selTmpl='custom';
+  TMPLS=await api('/api/templates'); renderCats(); renderTmpls();
+}
+function renderPicker(){
+  const q=document.getElementById('v-q').value.trim().toLowerCase();
+  const cid=document.getElementById('v-cls').value;
+  const list=CACHE.students.filter(s=>(!cid||s.classId===cid)&&matchStu(s,q)).slice(0,200);
+  document.getElementById('v-list').innerHTML=list.length?list.map(s=>`
+    <div class="stu${s.id===selStu?' on':''}" data-id="${s.id}" onclick="pickS('${s.id}')">
+      <div><div class="n">${esc(s.name)}</div>
+      <div class="c">${esc(s.class_name||'')} · ${s.email?esc(s.email):'بدون بريد'}</div></div>
+      ${s.email?'':'<span class="no-mail">لا يمكن الإرسال</span>'}
+    </div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
+}
+async function pickS(id){
+  const s=CACHE.students.find(x=>x.id===id); if(!s) return;
+  selStu=id;
+  document.querySelectorAll('.stu').forEach(e=>e.classList.toggle('on',e.dataset.id===id));
+  document.getElementById('v-name').textContent=s.name;
+  document.getElementById('v-info').textContent=`${s.class_name||''} · ${s.email||'لا يوجد بريد مسجّل'}`;
+  document.getElementById('v-picked').style.display='block';
+  await loadDefaults();
+}
+function quickV(id){ pendingStu=id; go('violation'); }
+
+/* ============ المحرر ============ */
+async function loadDefaults(){
+  OPT=await api('/api/violations/defaults',{method:'POST',body:JSON.stringify({studentId:selStu||'',template:selTmpl})});
+  applyOpts(); schedulePreview(0);
+}
+function resetToTemplate(){
+  if(!confirm('سيتم استرجاع نص القالب الأصلي وإلغاء تعديلاتك الحالية. متابعة؟')) return;
+  loadDefaults();
+}
+function applyOpts(){
+  document.querySelectorAll('[data-opt]').forEach(el=>{
+    const k=el.dataset.opt, v=OPT[k];
+    if(el.type==='checkbox') el.checked=!!v; else el.value=(v==null?'':v);
+  });
+  renderPoints(); renderDetails();
+}
+function readOpts(){
+  document.querySelectorAll('[data-opt]').forEach(el=>{
+    const k=el.dataset.opt;
+    if(el.type==='checkbox') OPT[k]=el.checked;
+    else if(el.type==='number') OPT[k]=Number(el.value)||14;
+    else OPT[k]=el.value;
+  });
+}
+function setAccent(c){
+  OPT.accent=c; accent_picker.value=c; accent_text.value=c; schedulePreview();
+}
+function copyVar(el){
+  navigator.clipboard?.writeText(el.textContent).then(()=>toast('تم نسخ '+el.textContent)).catch(()=>{});
+}
+
+/* نقاط */
+function renderPoints(){
+  document.getElementById('points-rows').innerHTML=(OPT.points||[]).map((p,i)=>`
+    <div class="ln"><input value="${esc(p)}" oninput="OPT.points[${i}]=this.value;schedulePreview()">
+    <button class="rm" onclick="OPT.points.splice(${i},1);renderPoints();schedulePreview()">✕</button></div>`).join('');
+}
+function addPoint(){ OPT.points=OPT.points||[]; OPT.points.push(''); renderPoints(); schedulePreview(); }
+
+/* صفوف الجدول */
+function renderDetails(){
+  document.getElementById('details-rows').innerHTML=(OPT.details||[]).map((r,i)=>`
+    <div class="ln">
+      <input value="${esc(r[0]||'')}" placeholder="العنوان" oninput="OPT.details[${i}][0]=this.value;schedulePreview()">
+      <input value="${esc(r[1]||'')}" placeholder="القيمة" oninput="OPT.details[${i}][1]=this.value;schedulePreview()">
+      <button class="rm" onclick="OPT.details.splice(${i},1);renderDetails();schedulePreview()">✕</button></div>`).join('');
+}
+function addDetail(){ OPT.details=OPT.details||[]; OPT.details.push(['','']); renderDetails(); schedulePreview(); }
+
+/* معاينة حيّة */
+let pvT;
+function schedulePreview(delay=450){
+  clearTimeout(pvT);
+  document.getElementById('pv-state').textContent='جارٍ التحديث...';
+  pvT=setTimeout(doPreview,delay);
+}
+async function doPreview(){
+  readOpts();
+  try{
+    const r=await api('/api/violations/preview',{method:'POST',body:JSON.stringify({options:OPT})});
+    document.getElementById('pv-frame').srcdoc=r.html||'';
+    document.getElementById('pv-state').textContent='محدَّثة';
+  }catch{ document.getElementById('pv-state').textContent='تعذّر التحديث'; }
+}
+document.addEventListener('input',e=>{
+  if(e.target.matches('[data-opt]')){
+    const k=e.target.dataset.opt;
+    if(k==='accent'){ accent_picker.value=e.target.value; accent_text.value=e.target.value; }
+    if(k==='bg'){ bg_picker.value=e.target.value; bg_text.value=e.target.value; }
+    schedulePreview();
+  }
+});
+document.addEventListener('change',e=>{ if(e.target.matches('[data-opt]')) schedulePreview(120); });
+
+function openBigPreview(){
+  document.getElementById('pm-frame').srcdoc=document.getElementById('pv-frame').srcdoc;
+  document.getElementById('pm').classList.add('open');
+}
+function closePM(){ document.getElementById('pm').classList.remove('open'); }
+
+async function sendV(){
+  readOpts();
+  if(!selStu){ toast('اختر الطالب أولاً','err'); return; }
+  const s=CACHE.students.find(x=>x.id===selStu);
+  if(s&&!s.email){ toast('هذا الطالب ليس له بريد مسجّل','err'); return; }
+  if(!confirm(`إرسال الرسالة إلى ${s.email} (ولي أمر ${s.name})؟`)) return;
+  const b=document.getElementById('send-btn');
+  b.innerHTML='<span class="spin"></span>جاري الإرسال'; b.disabled=true;
+  const r=await api('/api/violations',{method:'POST',body:JSON.stringify({
+    studentId:selStu, template:selTmpl, options:OPT,
+    appendName:document.getElementById('append-name').checked })});
+  b.textContent='إرسال الرسالة'; b.disabled=false;
+  if(r.success){ toast('تم إرسال الرسالة'); loadStats(); }
+  else toast(r.error||'تعذّر الإرسال','err');
+}
+
+/* حفظ كقالب */
+function openSaveTmpl(){
+  readOpts();
+  document.getElementById('tm-label').value=OPT.badgeLabel||'';
+  document.getElementById('tmpl-modal').classList.add('open');
+}
+function closeSaveTmpl(){ document.getElementById('tmpl-modal').classList.remove('open'); }
+async function saveTmpl(){
+  readOpts();
+  const label=document.getElementById('tm-label').value.trim();
+  if(!label){ toast('اكتب اسم القالب','err'); return; }
+  const r=await api('/api/templates/custom',{method:'POST',body:JSON.stringify({
+    label, cat:document.getElementById('tm-cat').value.trim()||'قوالبي',
+    icon:document.getElementById('tm-icon').value.trim()||'⭐',
+    color:OPT.accent, subject:OPT.subject, opening:OPT.opening, message:OPT.message,
+    points:OPT.points, action:OPT.action, closing:OPT.closing, details:OPT.details })});
+  if(r.error){ toast(r.error,'err'); return; }
+  closeSaveTmpl(); toast('تم حفظ القالب');
+  TMPLS=await api('/api/templates'); selTmpl=r.key; renderCats(); renderTmpls();
+}
+
+/* ============ الإعدادات ============ */
+async function loadSettings(){
+  SETTINGS=await api('/api/settings');
+  document.querySelectorAll('[data-set]').forEach(el=>{
+    const v=SETTINGS[el.dataset.set];
+    if(el.type==='checkbox') el.checked=!!v; else el.value=(v==null?'':v);
+  });
+}
+async function saveSettings(){
+  const out={};
+  document.querySelectorAll('[data-set]').forEach(el=>{
+    const k=el.dataset.set;
+    if(el.type==='checkbox') out[k]=el.checked;
+    else if(el.type==='number') out[k]=Number(el.value)||14;
+    else out[k]=el.value;
+  });
+  const b=document.getElementById('set-btn');
+  b.innerHTML='<span class="spin"></span>جاري الحفظ'; b.disabled=true;
+  SETTINGS=await api('/api/settings',{method:'POST',body:JSON.stringify(out)});
+  b.textContent='حفظ الإعدادات'; b.disabled=false;
+  applyBrand(); toast('تم حفظ الإعدادات — ستُطبَّق على الرسائل الجديدة');
+}
+async function resetSettings(){
+  if(!confirm('استعادة كل الإعدادات الافتراضية؟')) return;
+  SETTINGS=await api('/api/settings/reset',{method:'POST'});
+  loadSettings(); applyBrand(); toast('تمت الاستعادة');
+}
+function applyBrand(){
+  if(SETTINGS.schoolName) document.getElementById('hd-name').textContent=SETTINGS.schoolName;
+  if(SETTINGS.logoUrl) document.getElementById('hd-logo').src=SETTINGS.logoUrl;
+}
+
+/* ============ السجل ============ */
+function logRow(v){
+  return `<div class="log">
+    <div class="d">${new Date(v.created_at).toLocaleDateString('ar-EG',{day:'2-digit',month:'short'})}</div>
+    <div class="b"><div class="n">${esc(v.studentName)} <span style="font-weight:400;color:var(--muted);font-size:12px">· ${esc(v.className)}</span></div>
+    <div class="m">${esc((v.subject||v.message||'').slice(0,110))}</div></div>
+    <div style="text-align:left;flex-shrink:0"><span class="tag ${v.sent?'ok':'bad'}">${v.sent?'تم الإرسال':'فشل'}</span>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(v.templateLabel||'')}</div></div></div>`;
+}
+async function loadLog(){
+  const v=await api('/api/violations');
+  const list=Array.isArray(v)?v.slice().reverse():[];
+  document.getElementById('log-body').innerHTML=list.length?list.map(logRow).join(''):'<div class="empty">لا توجد رسائل بعد</div>';
+}
+
+/* ============ البدء ============ */
+async function initApp(){
+  SETTINGS=await api('/api/settings'); applyBrand();
+  await loadStats(); loadDash();
+}
+document.querySelectorAll('.ov').forEach(ov=>ov.addEventListener('click',e=>{ if(e.target===ov) ov.classList.remove('open'); }));
+checkAuth();
+</script>
+</body>
+</html>
