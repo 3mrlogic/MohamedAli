@@ -7,27 +7,17 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 from message_templates import TEMPLATES
+import db as storage
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ---- مفتاح ثابت: يبقى بعد إعادة تشغيل السيرفر حتى لا يُطلب تسجيل الدخول كل مرة ----
-SECRET_PATH = os.path.join(os.path.dirname(__file__), ".secret_key")
+# مسارات مطلقة: لازمة لأن نقطة الدخول على Vercel تقع داخل مجلد api/
+app = Flask(__name__,
+            template_folder=os.path.join(BASE_DIR, "templates"),
+            static_folder=os.path.join(BASE_DIR, "static"))
 
-def _load_secret_key():
-    env = os.environ.get("SECRET_KEY")
-    if env:
-        return env
-    if os.path.exists(SECRET_PATH):
-        with open(SECRET_PATH, "r", encoding="utf-8") as f:
-            k = f.read().strip()
-        if k:
-            return k
-    k = secrets.token_hex(32)
-    with open(SECRET_PATH, "w", encoding="utf-8") as f:
-        f.write(k)
-    return k
-
-app.secret_key = _load_secret_key()
+# ---- مفتاح ثابت: يبقى بعد إعادة التشغيل حتى لا يُطلب تسجيل الدخول كل مرة ----
+app.secret_key = storage.get_secret_key()
 app.permanent_session_lifetime = timedelta(days=365)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -38,7 +28,6 @@ CORS(app, supports_credentials=True)
 
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT   = int(os.environ.get("SMTP_PORT", "587"))
-DB_PATH     = os.path.join(os.path.dirname(__file__), "data.json")
 
 # ====================== الإعدادات الافتراضية ======================
 DEFAULT_SETTINGS = {
@@ -81,11 +70,16 @@ DEFAULT_DB = {
 
 # ====================== قاعدة البيانات ======================
 def load_db():
-    if not os.path.exists(DB_PATH):
-        save_db(DEFAULT_DB)
-        return json.loads(json.dumps(DEFAULT_DB))
-    with open(DB_PATH, "r", encoding="utf-8") as f:
-        db = json.load(f)
+    db = storage.read_doc()
+    if db is None:
+        db = json.loads(json.dumps(DEFAULT_DB))
+        save_db(db)
+        return db
+    db.setdefault("classes", [])
+    db.setdefault("students", [])
+    db.setdefault("violations", [])
+    db.setdefault("violation_count", 0)
+    db.setdefault("auth", None)
     db.setdefault("settings", dict(DEFAULT_SETTINGS))
     db.setdefault("custom_templates", {})
     for k, v in DEFAULT_SETTINGS.items():
@@ -93,8 +87,7 @@ def load_db():
     return db
 
 def save_db(data):
-    with open(DB_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    storage.write_doc(data)
 
 def gen_id(): return str(uuid.uuid4())[:8]
 
@@ -741,6 +734,19 @@ def get_stats():
                     "total_violations": db.get("violation_count", 0),
                     "avg_per_class": round(len(db["students"]) / len(db["classes"]), 1) if db["classes"] else 0})
 
+@app.route("/api/health")
+def health():
+    """فحص سريع للتأكد أن الاتصال بقاعدة البيانات سليم بعد النشر."""
+    try:
+        db = load_db()
+        return jsonify({"ok": True, "storage": storage.backend_name(),
+                        "students": len(db["students"]), "classes": len(db["classes"]),
+                        "has_setup": bool(db.get("auth"))})
+    except Exception as ex:
+        return jsonify({"ok": False, "storage": storage.backend_name(),
+                        "error": str(ex)}), 500
+
 if __name__ == "__main__":
     print("EduManager  ->  http://localhost:5000")
+    print("storage:", "Postgres (Neon)" if storage.USING_POSTGRES else "local data.json")
     app.run(debug=True, port=5000)
