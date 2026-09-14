@@ -27,6 +27,7 @@ app.config.update(
 )
 CORS(app, supports_credentials=True)
 
+VERSION     = "2.0"
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT   = int(os.environ.get("SMTP_PORT", "587"))
 
@@ -223,7 +224,7 @@ def get_credentials():
     return jsonify({"email": auth.get("email", ""), "has_password": bool(auth.get("smtp_password"))})
 
 @app.route("/")
-def index(): return render_template("index.html")
+def index(): return render_template("index.html", version=VERSION)
 
 # ====================== الإعدادات ======================
 @app.route("/api/settings", methods=["GET"])
@@ -1172,7 +1173,7 @@ def health():
     """فحص سريع للتأكد أن الاتصال بقاعدة البيانات سليم بعد النشر."""
     try:
         db = load_db()
-        return jsonify({"ok": True, "storage": storage.backend_name(),
+        return jsonify({"ok": True, "version": VERSION, "storage": storage.backend_name(),
                         "students": len(db["students"]), "classes": len(db["classes"]),
                         "has_setup": bool(db.get("auth"))})
     except Exception as ex:
