@@ -138,6 +138,44 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 .log .del:hover{border-color:var(--red);color:var(--red)}
 .tag.wa{background:#e8f8ef;color:#128c4a}
 .tag.mail{background:var(--accent-soft);color:var(--accent)}
+/* إحصائيات */
+.ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.bar{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12.5px}
+.bar .l{width:38%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .t{flex:1;background:#eef1f4;border-radius:5px;height:10px;overflow:hidden}
+.bar .t i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.bar .v{width:28px;text-align:left;color:var(--muted);font-size:12px}
+.top-stu{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f1f3f5;font-size:13px;cursor:pointer}
+.top-stu:last-child{border-bottom:none}
+.top-stu:hover .nm{color:var(--accent)}
+.top-stu .cnt{margin-inline-start:auto;background:var(--red-soft);color:var(--red);border-radius:12px;padding:0 10px;font-size:12px;font-weight:700}
+.quality{font-size:12px;color:var(--muted);line-height:2}
+/* ملف الطالب */
+.nm-cell a{cursor:pointer;border-bottom:1px dashed transparent}
+.nm-cell a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.hist{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
+.hist .h{padding:9px 12px;border-bottom:1px solid #f1f3f5;font-size:12.5px;display:flex;gap:8px;align-items:center}
+.hist .h:last-child{border-bottom:none}
+.hist .h .d{color:var(--muted);font-size:11.5px;min-width:70px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}
+.chips span{font-size:11.5px;background:#f3f5f7;border-radius:12px;padding:2px 10px;color:var(--muted)}
+/* إرسال جماعي */
+.mode{display:flex;gap:6px;margin-bottom:12px}
+.mode button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 14px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.mode button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.stu .ck{width:16px;height:16px;margin:0;accent-color:var(--accent);flex-shrink:0}
+.stu.sel{background:var(--accent-soft)}
+.bulk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12.5px}
+.bulk-bar .cnt{background:var(--accent);color:#fff;border-radius:12px;padding:1px 10px;font-weight:700;font-size:12px}
+.res{max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
+.res .r{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid #f1f3f5;font-size:13px}
+.res .r:last-child{border-bottom:none}
+.res .r .sp{flex:1}
+.res .r.done{opacity:.55}
+/* استيراد */
+.imp-prev{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:var(--r)}
+.imp-prev table td,.imp-prev table th{font-size:12px;padding:6px 8px;white-space:nowrap}
+.hint-box{font-size:12px;color:var(--muted);background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;line-height:1.9;margin-bottom:12px}
 .tp-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,380px);gap:16px;align-items:start}
 @media(max-width:1000px){.tp-grid{grid-template-columns:1fr}}
 .tp-list{display:flex;flex-direction:column;gap:8px}
@@ -294,6 +332,12 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
       <div class="card-h"><h2>آخر الرسائل</h2><button class="btn btn-line btn-sm" onclick="go('log')">السجل الكامل</button></div>
       <div id="d-log"></div>
     </div>
+    <div class="ins" id="ins" style="margin-bottom:16px">
+      <div class="card" style="margin:0"><div class="card-h"><h2>الرسائل حسب الفصل</h2></div><div id="ins-class"></div></div>
+      <div class="card" style="margin:0"><div class="card-h"><h2>حسب نوع الرسالة</h2></div><div id="ins-cat"></div></div>
+      <div class="card" style="margin:0"><div class="card-h"><h2>أكثر الطلبة تلقّياً للرسائل</h2></div><div id="ins-top"></div></div>
+      <div class="card" style="margin:0"><div class="card-h"><h2>نظرة سريعة</h2></div><div class="quality" id="ins-q"></div></div>
+    </div>
   </div>
 
   <!-- الفصول -->
@@ -308,7 +352,11 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 
   <!-- الطلبة -->
   <div class="pg" id="pg-students">
-    <div class="ph"><div><h1>الطلبة</h1><p>بحث بالاسم أو الهاتف أو البريد</p></div></div>
+    <div class="ph"><div><h1>الطلبة</h1><p>اضغط على اسم الطالب لفتح ملفه</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-gray btn-sm" onclick="exportStudents()">⬇ تصدير Excel</button>
+        <button class="btn btn-line btn-sm" onclick="openImport()">⬆ استيراد طلبة</button>
+      </div></div>
     <div class="card">
       <div class="toolbar">
         <input id="st-q" placeholder="ابحث عن طالب..." oninput="renderStudents()">
@@ -345,13 +393,23 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
     </div>
 
     <div class="card">
-      <div class="card-h"><h2>٢ — اختر الطالب</h2></div>
+      <div class="card-h"><h2>٢ — اختر الطالب</h2>
+        <div class="mode">
+          <button id="mode-one" class="on" onclick="setMode('one')">طالب واحد</button>
+          <button id="mode-bulk" onclick="setMode('bulk')">إرسال جماعي</button>
+        </div></div>
       <div class="toolbar">
         <input id="v-q" placeholder="ابحث عن الطالب..." oninput="renderPicker()">
         <select id="v-cls" onchange="renderPicker()"><option value="">كل الفصول</option></select>
       </div>
       <div class="stu-list" id="v-list"></div>
       <div class="picked" id="v-picked" style="display:none;margin-top:14px"><b id="v-name"></b><span id="v-info"></span></div>
+      <div class="bulk-bar" id="bulk-bar" style="display:none">
+        <span class="cnt" id="bulk-cnt">0</span> طالب محدد
+        <button class="btn btn-gray btn-sm" onclick="bulkSelectShown(true)">تحديد كل المعروض</button>
+        <button class="btn btn-gray btn-sm" onclick="bulkSelectShown(false)">إلغاء التحديد</button>
+        <span style="color:var(--muted)">· اختر فصلاً من القائمة ثم "تحديد كل المعروض" لإرسال رسالة للفصل كله</span>
+      </div>
     </div>
 
     <div class="card-h" style="margin:22px 0 12px"><h2 style="font-size:15px;font-weight:700">٣ — تحكّم كامل في الرسالة</h2>
@@ -553,6 +611,7 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
   <div class="pg" id="pg-log">
     <div class="ph"><div><h1>سجل الرسائل</h1><p>كل ما تم إرساله من النظام</p></div><div style="display:flex;gap:8px">
         <button class="btn btn-gray btn-sm" onclick="loadLog()">تحديث</button>
+        <button class="btn btn-gray btn-sm" onclick="location.href='/api/export/log.csv'">⬇ تصدير Excel</button>
         <button class="btn btn-gray btn-sm" id="clear-log-btn" onclick="clearLog()">مسح السجل كله</button>
       </div></div>
     <div class="card"><div id="log-body"></div></div>
@@ -606,7 +665,9 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 
 <!-- نوافذ -->
 <div class="ov" id="pm"><div class="pm">
-  <div class="pm-h"><h3>معاينة الرسالة</h3><button class="btn btn-gray btn-sm" onclick="closePM()">إغلاق</button></div>
+  <div class="pm-h"><h3>معاينة الرسالة</h3><div style="display:flex;gap:6px">
+    <button class="btn btn-gray btn-sm" onclick="printPM()">🖨 طباعة</button>
+    <button class="btn btn-gray btn-sm" onclick="closePM()">إغلاق</button></div></div>
   <iframe id="pm-frame" title="معاينة"></iframe>
 </div></div>
 
@@ -637,6 +698,65 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
     <button class="btn btn-gray" onclick="closeWA()">إلغاء</button>
     <button class="btn btn-gray" onclick="copyWA()">نسخ النص</button>
     <a class="btn btn-wa" id="wa-open" href="#" target="_blank" rel="noopener" onclick="commitWA()">فتح واتساب</a>
+  </div>
+</div></div>
+
+<!-- ملف الطالب -->
+<div class="ov" id="stu-modal"><div class="modal" style="max-width:640px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <h3 style="margin:0" id="sm-title">ملف الطالب</h3>
+    <button class="btn btn-gray btn-sm" onclick="$('stu-modal').classList.remove('open')">إغلاق</button></div>
+  <div class="row">
+    <div class="fld"><label>الاسم</label><input id="sm-name"></div>
+    <div class="fld"><label>الفصل</label><select id="sm-class"></select></div>
+    <div class="fld"><label>الهاتف</label><input id="sm-phone" dir="ltr"></div>
+    <div class="fld"><label>هاتف آخر</label><input id="sm-phone2" dir="ltr"></div>
+  </div>
+  <div class="fld"><label>بريد ولي الأمر</label><input id="sm-email" dir="ltr"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <button class="btn btn-sm" id="sm-save" onclick="saveStudent()">حفظ التعديلات</button>
+    <button class="btn btn-line btn-sm" onclick="$('stu-modal').classList.remove('open');quickV(SM.id)">📧 إرسال رسالة</button>
+    <button class="btn btn-gray btn-sm" onclick="delStudentFromModal()">حذف الطالب</button>
+  </div>
+  <div class="card-h" style="margin-bottom:6px"><h2 style="font-size:14px">سجل الرسائل <span id="sm-count" class="pv-state"></span></h2></div>
+  <div class="chips" id="sm-chips"></div>
+  <div class="hist" id="sm-hist"></div>
+</div></div>
+
+<!-- نتائج الإرسال الجماعي -->
+<div class="ov" id="bulk-modal"><div class="modal" style="max-width:560px">
+  <h3 id="bulk-title">نتيجة الإرسال الجماعي</h3>
+  <div class="chips" id="bulk-sum"></div>
+  <div class="res" id="bulk-res"></div>
+  <div class="modal-act"><button class="btn" onclick="$('bulk-modal').classList.remove('open')">تم</button></div>
+</div></div>
+
+<!-- واتساب جماعي -->
+<div class="ov" id="wab-modal"><div class="modal" style="max-width:560px">
+  <h3>💬 واتساب جماعي</h3>
+  <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">واتساب لا يسمح بفتح عدة محادثات دفعة واحدة — اضغط "فتح" لكل طالب، أرسل، ثم ارجع للتالي. يُسجَّل كل واحد عند فتحه.</p>
+  <div class="res" id="wab-res"></div>
+  <div class="modal-act"><button class="btn btn-gray" onclick="$('wab-modal').classList.remove('open')">إغلاق</button></div>
+</div></div>
+
+<!-- استيراد -->
+<div class="ov" id="imp-modal"><div class="modal" style="max-width:720px">
+  <h3>⬆ استيراد طلبة</h3>
+  <div class="hint-box">
+    افتح ملف Excel، حدّد الأعمدة (الاسم، الفصل، الهاتف، هاتف آخر، البريد) وانسخها ثم الصقها هنا —
+    أو اختر ملف CSV. الصف الأول لو كان عناوين سيُكتشف تلقائياً.<br>
+    الفصل غير الموجود يُنشأ تلقائياً، والطالب المكرر (نفس الاسم والفصل) تُحدَّث بياناته بدل تكراره.
+  </div>
+  <div class="fld"><label>الصق من Excel</label><textarea id="imp-text" style="min-height:120px;direction:rtl" placeholder="الاسم	الفصل	الهاتف	هاتف آخر	البريد" oninput="impParse()"></textarea></div>
+  <div class="fld"><label>أو ملف CSV</label><input type="file" id="imp-file" accept=".csv,.txt,.tsv" onchange="impFile(this)"></div>
+  <div class="row">
+    <div class="fld"><label>عند وجود طالب مكرر</label><select id="imp-mode"><option value="update">تحديث بياناته</option><option value="skip">تخطّيه</option></select></div>
+    <div class="fld"><label>&nbsp;</label><div class="count" id="imp-count" style="margin:0;padding-top:10px"></div></div>
+  </div>
+  <div class="imp-prev" id="imp-prev"></div>
+  <div class="modal-act">
+    <button class="btn btn-gray" onclick="$('imp-modal').classList.remove('open')">إلغاء</button>
+    <button class="btn" id="imp-go" onclick="impGo()" disabled>استيراد</button>
   </div>
 </div></div>
 
@@ -735,6 +855,115 @@ async function loadDash(){
   const v=await api('/api/violations');
   const list=Array.isArray(v)?v.slice(-5).reverse():[];
   document.getElementById('d-log').innerHTML=list.length?list.map(x=>logRow(x,false)).join(''):'<div class="empty">لم تُرسل أي رسالة بعد</div>';
+  loadInsights();
+}
+
+async function loadInsights(){
+  const i=await api('/api/stats/insights'); if(i.error) return;
+  const bars=(arr)=>{ const mx=Math.max(1,...arr.map(x=>x.count));
+    return arr.length?arr.map(x=>`<div class="bar"><div class="l" title="${esc(x.name)}">${esc(x.name)}</div>
+      <div class="t"><i style="width:${Math.round(x.count/mx*100)}%"></i></div><div class="v">${x.count}</div></div>`).join('')
+      :'<div class="empty" style="padding:14px">لا توجد بيانات بعد</div>'; };
+  $('ins-class').innerHTML=bars(i.byClass);
+  $('ins-cat').innerHTML=bars(i.byCategory);
+  $('ins-top').innerHTML=i.topStudents.length?i.topStudents.map(t=>`
+    <div class="top-stu" onclick="openStudent('${t.id}')"><span class="nm">${esc(t.name)}</span>
+    <span style="color:var(--muted);font-size:11.5px">${esc(t.className||'')}</span><span class="cnt">${t.count}</span></div>`).join('')
+    :'<div class="empty" style="padding:14px">لا توجد بيانات بعد</div>';
+  $('ins-q').innerHTML=`📨 آخر 30 يوم: <b>${i.last30}</b> رسالة<br>
+    📧 بريد: <b>${i.byChannel.email}</b> &nbsp;·&nbsp; 💬 واتساب: <b>${i.byChannel.whatsapp}</b><br>
+    ⚠️ طلبة بدون بريد: <b>${i.noEmail}</b> &nbsp;·&nbsp; بدون هاتف: <b>${i.noPhone}</b>`;
+}
+
+/* ============ ملف الطالب ============ */
+let SM={id:null};
+async function openStudent(id){
+  const r=await api('/api/students/'+id+'/history'); if(r.error){ toast(r.error,'err'); return; }
+  const s=r.student; SM.id=id;
+  if(!CACHE.classes.length) await refresh();
+  $('sm-title').textContent=s.name;
+  $('sm-name').value=s.name||''; $('sm-phone').value=s.phone||''; $('sm-phone2').value=s.phone2||''; $('sm-email').value=s.email||'';
+  const sel=$('sm-class'); sel.innerHTML=CACHE.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); sel.value=s.classId;
+  $('sm-count').textContent=r.count?`${r.count} رسالة`:'';
+  $('sm-chips').innerHTML=r.byTemplate.map(([k,n])=>`<span>${esc(k)} × ${n}</span>`).join('');
+  $('sm-hist').innerHTML=r.history.length?r.history.map(v=>`
+    <div class="h"><span class="d">${new Date(v.created_at).toLocaleDateString('ar-EG',{day:'2-digit',month:'short',year:'2-digit'})}</span>
+      <span>${v.channel==='whatsapp'?'💬':'📧'}</span><span style="flex:1">${esc(v.templateLabel||v.subject||'')}</span>
+      <span class="tag ${v.sent?'ok':'bad'}">${v.sent?'تم':'فشل'}</span></div>`).join('')
+    :'<div class="empty" style="padding:16px">لم تُرسل له أي رسالة بعد</div>';
+  $('stu-modal').classList.add('open');
+}
+async function saveStudent(){
+  const b=$('sm-save'); b.innerHTML='<span class="spin"></span>جاري الحفظ'; b.disabled=true;
+  const r=await api('/api/students/'+SM.id,{method:'PUT',body:JSON.stringify({
+    name:$('sm-name').value.trim(), classId:$('sm-class').value, phone:$('sm-phone').value.trim(),
+    phone2:$('sm-phone2').value.trim(), email:$('sm-email').value.trim() })});
+  b.textContent='حفظ التعديلات'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  toast('تم حفظ بيانات الطالب'); $('sm-title').textContent=r.name;
+  await refresh();
+  if($('pg-students').classList.contains('on')) renderStudents();
+  if($('pg-violation').classList.contains('on')) renderPicker();
+}
+async function delStudentFromModal(){
+  const s=CACHE.students.find(x=>x.id===SM.id);
+  if(!confirm(`حذف الطالب «${s?s.name:''}» نهائياً؟`)) return;
+  await api('/api/students/'+SM.id,{method:'DELETE'});
+  $('stu-modal').classList.remove('open'); toast('تم حذف الطالب');
+  await refresh(); loadStats();
+  if($('pg-students').classList.contains('on')) renderStudents();
+}
+function exportStudents(){
+  const cid=$('st-cls').value;
+  location.href='/api/export/students.csv'+(cid?'?classId='+encodeURIComponent(cid):'');
+}
+
+/* ============ الاستيراد ============ */
+let IMP=[];
+function openImport(){ $('imp-text').value=''; $('imp-file').value=''; IMP=[]; impRender(); $('imp-modal').classList.add('open'); }
+function impFile(inp){
+  const f=inp.files&&inp.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>{ $('imp-text').value=rd.result; impParse(); }; rd.readAsText(f,'utf-8');
+}
+function impParse(){
+  const raw=$('imp-text').value.replace(/^\ufeff/,'').trim();
+  IMP=[]; if(!raw){ impRender(); return; }
+  const lines=raw.split(/\r?\n/).filter(l=>l.trim());
+  const sep=lines[0].includes('\t')?'\t':(lines[0].split(',').length>lines[0].split(';').length?',':';');
+  const split=l=>l.split(sep).map(x=>x.replace(/^"|"$/g,'').trim());
+  let rows=lines.map(split);
+  // اكتشاف صف العناوين
+  const H={name:['الاسم','اسم الطالب','name','student'],cls:['الفصل','الصف','الشعبة','class','section'],
+           phone:['الهاتف','هاتف','الجوال','phone','mobile'],phone2:['هاتف آخر','هاتف2','الهاتف(2)','phone2'],email:['البريد','الايميل','الإيميل','email','mail']};
+  const first=rows[0].map(x=>x.toLowerCase());
+  const find=keys=>first.findIndex(c=>keys.some(k=>c.includes(k.toLowerCase())));
+  let idx={name:find(H.name),cls:find(H.cls),phone:find(H.phone),phone2:find(H.phone2),email:find(H.email)};
+  const hasHeader=idx.name>=0||idx.cls>=0||idx.email>=0;
+  if(hasHeader){ rows=rows.slice(1); if(idx.phone2===idx.phone) idx.phone2=-1; }
+  else idx={name:0,cls:1,phone:2,phone2:3,email:4};
+  if(idx.name<0) idx.name=0; if(idx.cls<0) idx.cls=1;
+  const g=(r,i)=>i>=0&&i<r.length?r[i]:'';
+  IMP=rows.map(r=>({name:g(r,idx.name),className:g(r,idx.cls),phone:g(r,idx.phone).replace(/\D/g,''),
+                    phone2:g(r,idx.phone2).replace(/\D/g,''),email:g(r,idx.email).toLowerCase()}))
+          .filter(r=>r.name&&r.className);
+  impRender();
+}
+function impRender(){
+  $('imp-go').disabled=!IMP.length;
+  $('imp-count').textContent=IMP.length?`${IMP.length} طالب جاهز للاستيراد`:'';
+  $('imp-prev').innerHTML=IMP.length?`<table><thead><tr><th>#</th><th>الاسم</th><th>الفصل</th><th>الهاتف</th><th>هاتف آخر</th><th>البريد</th></tr></thead><tbody>
+    ${IMP.slice(0,15).map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td class="mono">${esc(r.phone)}</td><td class="mono">${esc(r.phone2)}</td><td class="mono">${esc(r.email)}</td></tr>`).join('')}
+    ${IMP.length>15?`<tr><td colspan="6" style="color:var(--muted)">… و ${IMP.length-15} صف آخر</td></tr>`:''}</tbody></table>`
+    :'<div class="empty" style="padding:16px">الصق البيانات أعلاه لتظهر المعاينة</div>';
+}
+async function impGo(){
+  const b=$('imp-go'); b.innerHTML='<span class="spin"></span>جاري الاستيراد'; b.disabled=true;
+  const r=await api('/api/students/import',{method:'POST',body:JSON.stringify({rows:IMP,mode:$('imp-mode').value})});
+  b.textContent='استيراد'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  $('imp-modal').classList.remove('open');
+  toast(`تم: ${r.added} إضافة · ${r.updated} تحديث · ${r.skipped} تخطّي${r.newClasses.length?' · فصول جديدة: '+r.newClasses.length:''}`);
+  await refresh(); loadStats(); loadStudentsPage();
 }
 
 /* ============ الفصول ============ */
@@ -796,7 +1025,7 @@ function stuTable(list,q){
   return `<div class="tw"><table>
    <thead><tr><th>#</th><th>الطالب</th><th>الفصل</th><th>البريد</th><th>الهاتف</th><th></th></tr></thead>
    <tbody>${list.map((s,i)=>`<tr>
-     <td class="mono">${i+1}</td><td class="nm-cell">${hl(s.name,q)}</td>
+     <td class="mono">${i+1}</td><td class="nm-cell"><a onclick="openStudent('${s.id}')">${hl(s.name,q)}</a></td>
      <td><span class="tag">${esc(s.class_icon||'')}</span></td>
      <td class="mono">${s.email?hl(s.email,q):'<span style="color:#b0b8c2">—</span>'}</td>
      <td class="mono">${s.phone?hl(s.phone,q):'—'}</td>
@@ -824,7 +1053,8 @@ async function addStudent(){
 }
 
 /* ============ الرسالة: الحالة ============ */
-let selStu=null, selTmpl='custom', TMPLS={}, actCat='الكل', OPT={}, pendingStu=null;
+let selStu=null, selTmpl='custom', TMPLS={}, actCat='الكل', OPT={}, pendingStu=null, pendingTmpl=null;
+let MODE='one', bulkSel=new Set();
 const SWATCHES=['#0f5b8a','#c0392b','#e67e22','#27ae60','#8e44ad','#16a085','#2980b9','#d35400','#7f8c8d','#f39c12'];
 
 async function loadVPage(){
@@ -832,8 +1062,9 @@ async function loadVPage(){
   TMPLS=await api('/api/templates');
   fillClassSelect(document.getElementById('v-cls'),'كل الفصول');
   document.getElementById('swatches').innerHTML=SWATCHES.map(c=>`<i style="background:${c}" onclick="setAccent('${c}')"></i>`).join('');
+  if(pendingTmpl){ if(TMPLS[pendingTmpl]) selTmpl=pendingTmpl; pendingTmpl=null; }
   renderCats(); renderTmpls();
-  if(pendingStu){ document.getElementById('v-q').value=''; document.getElementById('v-cls').value=''; }
+  if(pendingStu){ document.getElementById('v-q').value=''; document.getElementById('v-cls').value=''; setMode('one',true); }
   renderPicker();
   if(pendingStu){ const id=pendingStu; pendingStu=null; await pickS(id);
     const el=document.querySelector(`.stu[data-id="${id}"]`); if(el) el.scrollIntoView({block:'center'}); }
@@ -867,17 +1098,47 @@ async function delTmpl(k){
   if(selTmpl===k) selTmpl='custom';
   TMPLS=await api('/api/templates'); renderCats(); renderTmpls();
 }
-function renderPicker(){
+function shownStudents(){
   const q=document.getElementById('v-q').value.trim().toLowerCase();
   const cid=document.getElementById('v-cls').value;
-  const list=CACHE.students.filter(s=>(!cid||s.classId===cid)&&matchStu(s,q)).slice(0,200);
+  return CACHE.students.filter(s=>(!cid||s.classId===cid)&&matchStu(s,q)).slice(0,400);
+}
+function renderPicker(){
+  const list=shownStudents();
+  const bulk=MODE==='bulk';
   document.getElementById('v-list').innerHTML=list.length?list.map(s=>`
-    <div class="stu${s.id===selStu?' on':''}" data-id="${s.id}" onclick="pickS('${s.id}')">
+    <div class="stu${!bulk&&s.id===selStu?' on':''}${bulk&&bulkSel.has(s.id)?' sel':''}" data-id="${s.id}"
+         onclick="${bulk?`toggleBulk('${s.id}')`:`pickS('${s.id}')`}">
+      ${bulk?`<input type="checkbox" class="ck" ${bulkSel.has(s.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${s.id}')">`:''}
       <div><div class="n">${esc(s.name)}</div>
       <div class="c">${esc(s.class_name||'')} · ${s.email?esc(s.email):'بدون بريد'}</div></div>
       ${s.email?'':'<span class="no-mail">بدون بريد — واتساب فقط</span>'}
     </div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
+  updateBulkBar();
 }
+function setMode(m, silent){
+  if(MODE===m) return;
+  MODE=m; bulkSel.clear();
+  $('mode-one').classList.toggle('on',m==='one'); $('mode-bulk').classList.toggle('on',m==='bulk');
+  $('bulk-bar').style.display=m==='bulk'?'flex':'none';
+  $('v-picked').style.display='none';
+  $('send-btn').textContent=m==='bulk'?'📧 إرسال بريد للمحددين':'📧 إرسال بريد';
+  $('wa-btn').textContent=m==='bulk'?'💬 واتساب للمحددين':'💬 إرسال واتساب';
+  $('wa-btn').disabled=false;
+  renderPicker();
+  if(!silent) loadDefaults();
+}
+function toggleBulk(id){
+  if(bulkSel.has(id)) bulkSel.delete(id); else bulkSel.add(id);
+  const row=document.querySelector(`.stu[data-id="${id}"]`);
+  if(row){ row.classList.toggle('sel',bulkSel.has(id)); const ck=row.querySelector('.ck'); if(ck) ck.checked=bulkSel.has(id); }
+  updateBulkBar(); schedulePreview(300);
+}
+function bulkSelectShown(on){
+  shownStudents().forEach(s=>on?bulkSel.add(s.id):bulkSel.delete(s.id));
+  renderPicker(); schedulePreview(300);
+}
+function updateBulkBar(){ $('bulk-cnt').textContent=bulkSel.size; }
 async function pickS(id){
   const s=CACHE.students.find(x=>x.id===id); if(!s) return;
   selStu=id;
@@ -898,7 +1159,8 @@ function quickV(id){ pendingStu=id; go('violation'); }
 
 /* ============ المحرر ============ */
 async function loadDefaults(){
-  OPT=await api('/api/violations/defaults',{method:'POST',body:JSON.stringify({studentId:selStu||'',template:selTmpl})});
+  OPT=await api('/api/violations/defaults',{method:'POST',body:JSON.stringify({
+    studentId:MODE==='bulk'?'':(selStu||''), template:selTmpl, bulk:MODE==='bulk' })});
   applyOpts(); schedulePreview(0);
 }
 function resetToTemplate(){
@@ -955,9 +1217,10 @@ function schedulePreview(delay=450){
 async function doPreview(){
   readOpts();
   try{
-    const r=await api('/api/violations/preview',{method:'POST',body:JSON.stringify({options:OPT})});
+    const pid=MODE==='bulk'?(bulkSel.size?[...bulkSel][0]:''):(selStu||'');
+    const r=await api('/api/violations/preview',{method:'POST',body:JSON.stringify({options:OPT,previewStudentId:pid})});
     document.getElementById('pv-frame').srcdoc=r.html||'';
-    document.getElementById('pv-state').textContent='محدَّثة';
+    document.getElementById('pv-state').textContent=MODE==='bulk'&&pid?'محدَّثة — معاينة لأول طالب محدد':'محدَّثة';
   }catch{ document.getElementById('pv-state').textContent='تعذّر التحديث'; }
 }
 document.addEventListener('input',e=>{
@@ -978,6 +1241,7 @@ function closePM(){ document.getElementById('pm').classList.remove('open'); }
 
 async function sendV(){
   readOpts();
+  if(MODE==='bulk') return sendBulk();
   if(!selStu){ toast('اختر الطالب أولاً','err'); return; }
   const s=CACHE.students.find(x=>x.id===selStu);
   if(s&&!s.email){ toast('هذا الطالب ليس له بريد مسجّل','err'); return; }
@@ -996,6 +1260,7 @@ async function sendV(){
 let WA={url:'',phone:'',text:''};
 async function sendWA(){
   readOpts();
+  if(MODE==='bulk') return sendWABulk();
   if(!selStu){ toast('اختر الطالب أولاً','err'); return; }
   const b=$('wa-btn'); b.innerHTML='<span class="spin"></span>جاري التجهيز'; b.disabled=true;
   const r=await api('/api/violations/whatsapp',{method:'POST',body:JSON.stringify({
@@ -1019,6 +1284,52 @@ function commitWA(){
     .then(()=>{ loadStats(); }).catch(()=>{});
   setTimeout(()=>{ closeWA(); toast('تم فتح واتساب — اضغط إرسال هناك'); }, 300);
   return true;
+}
+
+/* ============ الإرسال الجماعي ============ */
+async function sendBulk(){
+  const ids=[...bulkSel];
+  if(!ids.length){ toast('حدّد الطلبة أولاً','err'); return; }
+  const withMail=ids.filter(id=>{ const s=CACHE.students.find(x=>x.id===id); return s&&s.email; }).length;
+  if(!withMail){ toast('لا أحد من المحددين له بريد — استخدم واتساب','err'); return; }
+  if(!confirm(`إرسال البريد إلى ${withMail} ولي أمر${ids.length>withMail?` (سيُتخطّى ${ids.length-withMail} بدون بريد)`:''}؟`)) return;
+  const b=$('send-btn'); b.innerHTML='<span class="spin"></span>جاري الإرسال...'; b.disabled=true;
+  const r=await api('/api/violations/bulk',{method:'POST',body:JSON.stringify({
+    studentIds:ids, template:selTmpl, options:OPT, appendName:$('append-name').checked })});
+  b.textContent='📧 إرسال بريد للمحددين'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  $('bulk-title').textContent='نتيجة الإرسال الجماعي';
+  $('bulk-sum').innerHTML=`<span style="background:var(--green-soft);color:var(--green)">✔ أُرسل ${r.sent}</span>
+    ${r.failed?`<span style="background:var(--red-soft);color:var(--red)">✘ فشل ${r.failed}</span>`:''}
+    ${r.skipped?`<span>⊘ بدون بريد ${r.skipped}</span>`:''}`;
+  $('bulk-res').innerHTML=r.results.map(x=>`<div class="r"><span>${x.status==='sent'?'✔':x.status==='failed'?'✘':'⊘'}</span>
+    <span>${esc(x.name)}</span><span class="sp"></span><span style="font-size:11.5px;color:var(--muted)">${esc(x.reason||'')}</span></div>`).join('');
+  $('bulk-modal').classList.add('open'); loadStats();
+}
+async function sendWABulk(){
+  const ids=[...bulkSel];
+  if(!ids.length){ toast('حدّد الطلبة أولاً','err'); return; }
+  const b=$('wa-btn'); b.innerHTML='<span class="spin"></span>جاري التجهيز'; b.disabled=true;
+  const r=await api('/api/violations/whatsapp/bulk',{method:'POST',body:JSON.stringify({studentIds:ids,options:OPT})});
+  b.textContent='💬 واتساب للمحددين'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  $('wab-res').innerHTML=r.items.map(x=>`<div class="r" id="wab-${x.id}"><span>${esc(x.name)}</span>
+    <span style="font-size:11.5px;color:var(--muted);direction:ltr">${x.phone?'+'+x.phone:'بدون هاتف'}</span><span class="sp"></span>
+    ${x.url?`<a class="btn btn-wa btn-sm" href="${x.url}" target="_blank" rel="noopener" onclick="wabDone('${x.id}')">فتح</a>`:''}</div>`).join('');
+  $('wab-modal').classList.add('open');
+}
+function wabDone(id){
+  const row=$('wab-'+id); if(row) row.classList.add('done');
+  api('/api/violations/whatsapp',{method:'POST',body:JSON.stringify({studentId:id,template:selTmpl,options:OPT,commit:true})})
+    .then(()=>loadStats()).catch(()=>{});
+  return true;
+}
+function resend(studentId, tmpl){ pendingStu=studentId; pendingTmpl=tmpl; go('violation'); }
+function printPM(){
+  const html=$('pm-frame').srcdoc||''; if(!html) return;
+  const w=window.open('','_blank'); if(!w){ toast('المتصفح منع فتح نافذة الطباعة','err'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  w.onload=()=>{ w.focus(); w.print(); }; setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 600);
 }
 
 /* ============ صفحة القوالب ============ */
@@ -1208,7 +1519,8 @@ function logRow(v, canDelete){
       ${chan} <span class="tag ${v.sent?'ok':'bad'}">${v.sent?(wa?'تم الفتح':'تم الإرسال'):'فشل'}</span>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(v.templateLabel||'')}</div>
     </div>
-    ${canDelete?`<button class="del" title="حذف من السجل" onclick="delLog('${v.id}')">✕</button>`:''}
+    ${canDelete?`<button class="del" title="إعادة الإرسال" onclick="resend('${v.studentId}','${v.template||'custom'}')">↻</button>
+    <button class="del" title="حذف من السجل" onclick="delLog('${v.id}')">✕</button>`:''}
   </div>`;
 }
 async function loadLog(){

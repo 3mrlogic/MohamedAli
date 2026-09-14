@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify, render_template, session, g, has_request_context
+from flask import Flask, request, jsonify, render_template, session, g, has_request_context, Response
 from flask_cors import CORS
-import json, os, re, smtplib, uuid, secrets, hmac, html as html_lib
+import json, os, re, smtplib, uuid, secrets, hmac, csv, io as _io, html as html_lib
 from urllib.parse import quote
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -161,6 +161,15 @@ def auth_login():
     if not auth:
         return jsonify({"error": "لم يتم الإعداد بعد", "needs_setup": True}), 400
 
+    # قفل مؤقت بعد 5 محاولات فاشلة خلال 10 دقائق
+    now = datetime.now()
+    failed = [t for t in (auth.get("failed") or [])
+              if (now - datetime.fromisoformat(t)).total_seconds() < 600]
+    if len(failed) >= 5:
+        wait = 600 - int((now - datetime.fromisoformat(failed[0])).total_seconds())
+        return jsonify({"error": "تم إيقاف الدخول مؤقتاً بعد محاولات خاطئة متكررة. حاول بعد %d دقيقة." % max(1, wait // 60),
+                        "locked": True, "retry_after": wait}), 429
+
     stored = auth.get("smtp_password") or ""
 
     def same(a, b):
@@ -174,8 +183,20 @@ def auth_login():
     if not same_pw and stored:
         same_pw = same(pw.replace(" ", ""), stored.replace(" ", ""))
     if not (same_mail and same_pw):
-        return jsonify({"error": "البريد أو كلمة المرور غير صحيحة"}), 401
+        failed.append(now.isoformat())
+        auth["failed"] = failed
+        db["auth"] = auth
+        save_db(db)
+        left = 5 - len(failed)
+        msg = "البريد أو كلمة المرور غير صحيحة"
+        if left <= 2:
+            msg += " — متبقٍ %d محاولة قبل الإيقاف المؤقت" % left if left > 0 else ""
+        return jsonify({"error": msg, "attempts_left": left}), 401
 
+    if auth.get("failed"):
+        auth["failed"] = []
+        db["auth"] = auth
+        save_db(db)
     start_session(email, db)
     return jsonify({"success": True})
 
@@ -398,11 +419,8 @@ def e(t):
 def nl2br(t):
     return e(t).replace("\r\n", "\n").replace("\n", "<br>")
 
-def build_options(tmpl_key, student, class_name, db, overrides=None):
-    """يبني حزمة الخيارات الكاملة: القالب + الإعدادات + تعديلات المستخدم."""
-    st = db["settings"]
-    tm = all_templates(db).get(tmpl_key) or all_templates(db)["custom"]
-    ctx = {
+def student_ctx(student, class_name, st):
+    return {
         "student": student.get("name", ""),
         "class":   class_name,
         "school":  st["schoolName"],
@@ -410,6 +428,34 @@ def build_options(tmpl_key, student, class_name, db, overrides=None):
         "phone":   student.get("phone", ""),
         "email":   student.get("email", ""),
     }
+
+def resolve_options(opts, student, class_name, db):
+    """يستبدل المتغيّرات في كل نصوص الخيارات لطالب محدد (آمن على نص مُستبدَل مسبقاً)."""
+    ctx = student_ctx(student, class_name, db["settings"])
+    out = {}
+    for k, v in (opts or {}).items():
+        if isinstance(v, str):
+            out[k] = fill(v, ctx)
+        elif k == "points" and isinstance(v, list):
+            out[k] = [fill(str(p), ctx) for p in v]
+        elif k == "details" and isinstance(v, list):
+            out[k] = [[fill(str(r[0]), ctx), fill(str(r[1]) if len(r) > 1 else "", ctx)] for r in v if r]
+        else:
+            out[k] = v
+    out["studentName"] = ctx["student"]
+    out["className"]   = ctx["class"]
+    return out
+
+def build_options(tmpl_key, student, class_name, db, overrides=None, keep_placeholders=False):
+    """يبني حزمة الخيارات الكاملة: القالب + الإعدادات + تعديلات المستخدم."""
+    st = db["settings"]
+    tm = all_templates(db).get(tmpl_key) or all_templates(db)["custom"]
+    if keep_placeholders:
+        # للإرسال الجماعي: تبقى {student} و{class} كما هي وتُستبدل لكل طالب عند الإرسال
+        ctx = {k: "{%s}" % k for k in ("student", "class", "school", "date", "phone", "email")}
+        ctx["school"] = st["schoolName"]; ctx["date"] = ar_date()
+    else:
+        ctx = student_ctx(student, class_name, st)
     o = {
         "template": tmpl_key,
         "subject":  fill(tm.get("subject", ""), ctx),
@@ -752,6 +798,7 @@ def whatsapp_violation():
 
     opts = d.get("options") or build_options(tmpl_key, student, class_name, db,
                                              {"message": d.get("message")})
+    opts = resolve_options(opts, student, class_name, db)
     text = whatsapp_text(opts)
     if not text.strip():
         return jsonify({"error": "الرسالة فارغة"}), 400
@@ -771,6 +818,36 @@ def whatsapp_violation():
 
     return jsonify({"success": True, "url": url, "phone": phone, "text": text})
 
+# ====================== SMTP ======================
+class _smtp_session:
+    """اتصال SMTP واحد يُعاد استخدامه لعدة رسائل (أسرع بكثير في الإرسال الجماعي)."""
+    def __init__(self, db):
+        auth = db.get("auth", {}) or {}
+        self.user = auth.get("email", "")
+        self.pw   = auth.get("smtp_password", "")
+        self.srv  = None
+    def __enter__(self):
+        self.srv = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=25)
+        self.srv.starttls()
+        self.srv.login(self.user, self.pw)
+        return self.srv
+    def __exit__(self, *a):
+        try:
+            self.srv.quit()
+        except Exception:
+            pass
+        return False
+
+def _smtp_send(srv, db, to_email, subject, html_body, text_body):
+    sender = (db.get("auth", {}) or {}).get("email", "")
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to_email
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    srv.sendmail(sender, to_email, msg.as_string())
+
 # ====================== البلاغات ======================
 def _student_ctx(db, student_id):
     cm = {c["id"]: c for c in db["classes"]}
@@ -789,20 +866,24 @@ def violation_defaults():
     student, class_name = _student_ctx(db, d.get("studentId", ""))
     if not student:
         student, class_name = {"name": "[اسم الطالب]", "email": "", "phone": ""}, "[الفصل]"
-    return jsonify(build_options(d.get("template", "custom"), student, class_name, db))
+    return jsonify(build_options(d.get("template", "custom"), student, class_name, db,
+                                 keep_placeholders=bool(d.get("bulk"))))
 
 @app.route("/api/violations/preview", methods=["POST"])
 @login_required
 def preview_violation():
     d = request.json or {}
     opts = d.get("options")
+    db = load_db()
+    sid = d.get("previewStudentId") or d.get("studentId") or ""
+    student, class_name = _student_ctx(db, sid)
     if not opts:
-        db = load_db()
-        student, class_name = _student_ctx(db, d.get("studentId", ""))
         if not student:
             student, class_name = {"name": "[اسم الطالب]", "email": "", "phone": ""}, "[الفصل]"
         opts = build_options(d.get("template", "custom"), student, class_name, db,
                              {"message": d.get("message")})
+    elif student:
+        opts = resolve_options(opts, student, class_name, db)
     return jsonify({"html": build_email_html(opts), "subject": opts.get("subject", "")})
 
 @app.route("/api/violations", methods=["POST"])
@@ -820,6 +901,7 @@ def send_violation():
 
     opts = d.get("options") or build_options(tmpl_key, student, class_name, db,
                                              {"message": d.get("message")})
+    opts = resolve_options(opts, student, class_name, db)
     if not str(opts.get("message") or "").strip() and not str(opts.get("opening") or "").strip():
         return jsonify({"error": "الرسالة فارغة — اكتب نص الرسالة أولاً"}), 400
 
@@ -828,20 +910,10 @@ def send_violation():
     if d.get("appendName", True):
         subject = "%s — %s" % (subject, student["name"])
 
-    auth = db.get("auth", {}) or {}
-    sender_email = auth.get("email", "")
-    smtp_pass    = auth.get("smtp_password", "")
     sent, send_error = False, None
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = sender_email
-        msg["To"] = student["email"]
-        msg.attach(MIMEText(plain_text(opts), "plain", "utf-8"))
-        msg.attach(MIMEText(html_body, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as srv:
-            srv.starttls(); srv.login(sender_email, smtp_pass)
-            srv.sendmail(sender_email, student["email"], msg.as_string())
+        with _smtp_session(db) as srv:
+            _smtp_send(srv, db, student["email"], subject, html_body, plain_text(opts))
         sent = True
     except Exception as ex:
         send_error = str(ex)
@@ -886,6 +958,206 @@ def clear_violations():
     db["violations"] = []
     save_db(db)
     return jsonify({"success": True, "deleted": n})
+
+# ====================== الإرسال الجماعي ======================
+@app.route("/api/violations/bulk", methods=["POST"])
+@login_required
+def send_bulk():
+    """يرسل نفس الرسالة (بمتغيّراتها) لعدة طلبة عبر اتصال SMTP واحد."""
+    d = request.json or {}
+    ids = [str(x) for x in (d.get("studentIds") or [])][:200]
+    if not ids:
+        return jsonify({"error": "لم يتم اختيار أي طالب"}), 400
+    tmpl_key = d.get("template", "custom")
+    base = d.get("options") or {}
+    db = load_db()
+    if not str(base.get("message") or "").strip() and not str(base.get("opening") or "").strip():
+        return jsonify({"error": "الرسالة فارغة"}), 400
+
+    results, sent, failed, skipped = [], 0, 0, 0
+    srv = None
+    try:
+        srv = _smtp_session(db).__enter__()
+        smtp_err = None
+    except Exception as ex:
+        smtp_err = str(ex)
+
+    for sid in ids:
+        student, class_name = _student_ctx(db, sid)
+        if not student:
+            continue
+        if not student.get("email"):
+            skipped += 1
+            results.append({"id": sid, "name": student["name"], "status": "skipped", "reason": "بدون بريد"})
+            continue
+        opts = resolve_options(base, student, class_name, db)
+        subject = (opts.get("subject") or "رسالة من إدارة المدرسة").strip()
+        if d.get("appendName", True):
+            subject = "%s — %s" % (subject, student["name"])
+        ok, err = False, smtp_err
+        if srv is not None:
+            try:
+                _smtp_send(srv, db, student["email"], subject, build_email_html(opts), plain_text(opts))
+                ok = True
+            except Exception as ex:
+                err = str(ex)
+        rec = {"id": gen_id(), "studentId": sid, "studentName": student["name"],
+               "studentEmail": student["email"], "className": class_name, "channel": "email",
+               "message": opts.get("message") or opts.get("opening") or "",
+               "subject": subject, "template": tmpl_key,
+               "templateLabel": opts.get("badgeLabel") or "—", "bulk": True,
+               "sent": ok, "error": err, "created_at": datetime.now().isoformat()}
+        db.setdefault("violations", []).append(rec)
+        if ok: sent += 1
+        else:  failed += 1
+        results.append({"id": sid, "name": student["name"], "status": "sent" if ok else "failed", "reason": err})
+    if srv is not None:
+        try: srv.quit()
+        except Exception: pass
+    db["violation_count"] = db.get("violation_count", 0) + sent
+    save_db(db)
+    return jsonify({"success": failed == 0, "sent": sent, "failed": failed, "skipped": skipped,
+                    "results": results, "smtp_error": smtp_err})
+
+@app.route("/api/violations/whatsapp/bulk", methods=["POST"])
+@login_required
+def whatsapp_bulk():
+    """يجهّز رابط واتساب لكل طالب (الفتح والتسجيل يتمّان واحداً واحداً من الواجهة)."""
+    d = request.json or {}
+    ids = [str(x) for x in (d.get("studentIds") or [])][:200]
+    base = d.get("options") or {}
+    db = load_db()
+    out = []
+    for sid in ids:
+        student, class_name = _student_ctx(db, sid)
+        if not student: continue
+        phone = normalize_phone(student.get("phone") or student.get("phone2"))
+        if not phone:
+            out.append({"id": sid, "name": student["name"], "phone": "", "url": ""}); continue
+        opts = resolve_options(base, student, class_name, db)
+        text = whatsapp_text(opts)
+        out.append({"id": sid, "name": student["name"], "phone": phone,
+                    "url": "https://wa.me/%s?text=%s" % (phone, quote(text))})
+    return jsonify({"items": out})
+
+# ====================== ملف الطالب ======================
+@app.route("/api/students/<sid>/history")
+@login_required
+def student_history(sid):
+    db = load_db()
+    student, class_name = _student_ctx(db, sid)
+    if not student:
+        return jsonify({"error": "الطالب غير موجود"}), 404
+    hist = [v for v in db.get("violations", []) if v.get("studentId") == sid]
+    hist.sort(key=lambda v: v.get("created_at", ""), reverse=True)
+    by_tmpl = {}
+    for v in hist:
+        by_tmpl[v.get("templateLabel") or "—"] = by_tmpl.get(v.get("templateLabel") or "—", 0) + 1
+    return jsonify({"student": dict(student, class_name=class_name),
+                    "history": hist, "count": len(hist),
+                    "byTemplate": sorted(by_tmpl.items(), key=lambda x: -x[1])})
+
+# ====================== الاستيراد ======================
+@app.route("/api/students/import", methods=["POST"])
+@login_required
+def import_students():
+    """يستورد صفوفاً (اسم، فصل، هاتف، هاتف2، بريد). يُنشئ الفصول الناقصة ويحدّث المكرر."""
+    d = request.json or {}
+    rows = d.get("rows") or []
+    mode = d.get("mode", "update")          # update | skip
+    db = load_db()
+    by_name = {c["name"].strip(): c for c in db["classes"]}
+    by_icon = {str(c.get("icon", "")).strip(): c for c in db["classes"]}
+    existing = {(x["name"].strip(), x["classId"]): x for x in db["students"]}
+    added = updated = skipped = 0
+    new_classes = []
+    now = datetime.now().isoformat()
+    for r in rows[:2000]:
+        name = str(r.get("name") or "").strip()
+        cname = str(r.get("className") or "").strip()
+        if not name or not cname:
+            skipped += 1; continue
+        cls = by_name.get(cname) or by_icon.get(cname)
+        if not cls:
+            cls = {"id": gen_id(), "name": cname, "icon": cname[:6], "created_at": now}
+            db["classes"].append(cls); by_name[cname] = cls; new_classes.append(cname)
+        key = (name, cls["id"])
+        rec = {"name": name, "phone": str(r.get("phone") or "").strip(),
+               "phone2": str(r.get("phone2") or "").strip(),
+               "email": str(r.get("email") or "").strip().lower()}
+        if key in existing:
+            if mode == "skip":
+                skipped += 1; continue
+            ex = existing[key]
+            for k in ("phone", "phone2", "email"):
+                if rec[k]: ex[k] = rec[k]
+            updated += 1
+        else:
+            st = dict(rec, id=gen_id(), classId=cls["id"], created_at=now)
+            db["students"].append(st); existing[key] = st; added += 1
+    save_db(db)
+    return jsonify({"success": True, "added": added, "updated": updated, "skipped": skipped,
+                    "newClasses": new_classes, "total": len(db["students"])})
+
+# ====================== التصدير ======================
+def _csv_response(rows, header, filename):
+    buf = _io.StringIO()
+    buf.write("\ufeff")                     # BOM حتى يفتحه Excel بالعربية صحيحاً
+    w = csv.writer(buf)
+    w.writerow(header)
+    for r in rows: w.writerow(r)
+    return Response(buf.getvalue(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename*=UTF-8''%s" % quote(filename)})
+
+@app.route("/api/export/students.csv")
+@login_required
+def export_students():
+    db = load_db(); cm = {c["id"]: c for c in db["classes"]}
+    cid = request.args.get("classId", "")
+    rows = [(s["name"], cm.get(s["classId"], {}).get("name", ""), s.get("phone", ""),
+             s.get("phone2", ""), s.get("email", ""))
+            for s in db["students"] if not cid or s["classId"] == cid]
+    return _csv_response(rows, ["الاسم", "الفصل", "الهاتف", "هاتف آخر", "البريد"], "الطلبة.csv")
+
+@app.route("/api/export/log.csv")
+@login_required
+def export_log():
+    db = load_db()
+    rows = [(v.get("created_at", "")[:16].replace("T", " "), v.get("studentName", ""), v.get("className", ""),
+             "واتساب" if v.get("channel") == "whatsapp" else "بريد",
+             v.get("templateLabel", ""), v.get("subject", ""),
+             v.get("studentPhone") or v.get("studentEmail", ""),
+             "تم" if v.get("sent") else "فشل")
+            for v in reversed(db.get("violations", []))]
+    return _csv_response(rows, ["التاريخ", "الطالب", "الفصل", "القناة", "النوع", "الموضوع", "المرسَل إليه", "الحالة"], "سجل_الرسائل.csv")
+
+# ====================== إحصائيات ======================
+@app.route("/api/stats/insights")
+@login_required
+def insights():
+    db = load_db(); cm = {c["id"]: c for c in db["classes"]}
+    vios = db.get("violations", [])
+    tmpls = all_templates(db)
+    by_class, by_cat, by_student, by_chan = {}, {}, {}, {"email": 0, "whatsapp": 0}
+    cutoff = (datetime.now() - timedelta(days=30)).isoformat()
+    last30 = 0
+    for v in vios:
+        by_class[v.get("className", "—")] = by_class.get(v.get("className", "—"), 0) + 1
+        cat = (tmpls.get(v.get("template"), {}) or {}).get("cat") or "أخرى"
+        by_cat[cat] = by_cat.get(cat, 0) + 1
+        k = (v.get("studentId"), v.get("studentName"), v.get("className"))
+        by_student[k] = by_student.get(k, 0) + 1
+        by_chan["whatsapp" if v.get("channel") == "whatsapp" else "email"] += 1
+        if v.get("created_at", "") >= cutoff: last30 += 1
+    top = sorted(by_student.items(), key=lambda x: -x[1])[:8]
+    return jsonify({
+        "total": len(vios), "last30": last30, "byChannel": by_chan,
+        "byClass": sorted([{"name": k, "count": n} for k, n in by_class.items()], key=lambda x: -x["count"])[:10],
+        "byCategory": sorted([{"name": k, "count": n} for k, n in by_cat.items()], key=lambda x: -x["count"]),
+        "topStudents": [{"id": k[0], "name": k[1], "className": k[2], "count": n} for k, n in top],
+        "noEmail": sum(1 for s in db["students"] if not s.get("email")),
+        "noPhone": sum(1 for s in db["students"] if not s.get("phone") and not s.get("phone2")),
+    })
 
 @app.route("/api/stats")
 @login_required
