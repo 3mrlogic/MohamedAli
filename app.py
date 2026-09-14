@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
-import json, os, smtplib, uuid, secrets, hmac, html as html_lib
+import json, os, re, smtplib, uuid, secrets, hmac, html as html_lib
+from urllib.parse import quote
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -657,6 +658,119 @@ def plain_text(o):
     parts += ["", o.get("closing", ""), "", o.get("signName", ""), o.get("signTitle", "")]
     return "\n".join(str(p) for p in parts if p is not None)
 
+# ====================== واتساب ======================
+def normalize_phone(p):
+    """يحوّل الرقم إلى الصيغة الدولية بلا رموز: 0501234567 → 971501234567"""
+    d = re.sub(r"\D", "", str(p or ""))
+    if d.startswith("00"):
+        d = d[2:]
+    if d.startswith("0") and len(d) <= 10:          # رقم محلي إماراتي
+        d = "971" + d[1:]
+    return d if 8 <= len(d) <= 15 else ""
+
+def whatsapp_text(o):
+    """نسخة نصية منسّقة لواتساب من نفس خيارات الرسالة (*عريض* مدعوم)."""
+    L = []
+    def add(x=""):
+        L.append(str(x))
+    if o.get("schoolName"):
+        add("*%s*" % o["schoolName"])
+    if o.get("showBadge") and o.get("badgeLabel"):
+        add("%s %s" % (o.get("badgeIcon", ""), o["badgeLabel"]))
+    if o.get("showDate") and o.get("dateText"):
+        add("📅 " + o["dateText"])
+    add()
+    if o.get("showStudent") and o.get("studentName"):
+        add("👤 *%s*" % o["studentName"])
+        if o.get("className"):
+            add("🏫 " + o["className"])
+        add()
+    if o.get("showGreeting"):
+        if o.get("greeting"): add(o["greeting"])
+        if o.get("opening"):  add(o["opening"])
+        add()
+    rows = [r for r in (o.get("details") or []) if r and str(r[0]).strip()]
+    if o.get("showDetails") and rows:
+        if o.get("detailsTitle"): add("*%s*" % o["detailsTitle"])
+        for r in rows:
+            add("• %s: %s" % (r[0], r[1] if len(r) > 1 else ""))
+        add()
+    if str(o.get("message") or "").strip():
+        if o.get("messageTitle"): add("*%s*" % o["messageTitle"])
+        add(o["message"])
+        add()
+    pts = [p for p in (o.get("points") or []) if str(p).strip()]
+    if o.get("showPoints") and pts:
+        if o.get("pointsTitle"): add("*%s*" % o["pointsTitle"])
+        for i, p in enumerate(pts, 1):
+            add("%d. %s" % (i, p))
+        add()
+    if o.get("showAction") and str(o.get("action") or "").strip():
+        add("⚠️ *%s*" % (o.get("actionTitle") or "الإجراء المطلوب"))
+        add(o["action"])
+        add()
+    if o.get("showButton") and o.get("buttonText") and o.get("buttonUrl"):
+        add("🔗 %s: %s" % (o["buttonText"], o["buttonUrl"]))
+        add()
+    if str(o.get("closing") or "").strip():
+        add(o["closing"])
+        add()
+    if o.get("showSignature") and (o.get("signName") or o.get("signTitle")):
+        if o.get("signName"):  add("*%s*" % o["signName"])
+        if o.get("signTitle"): add(o["signTitle"])
+    if o.get("showContact") and (o.get("contactPhone") or o.get("contactEmail")):
+        add()
+        if o.get("contactPhone"): add("📞 " + o["contactPhone"])
+        if o.get("contactEmail"): add("✉️ " + o["contactEmail"])
+    # إزالة الأسطر الفارغة المتتالية
+    out, blank = [], False
+    for x in L:
+        if x.strip() == "":
+            if not blank: out.append("")
+            blank = True
+        else:
+            out.append(x); blank = False
+    return "\n".join(out).strip()
+
+@app.route("/api/violations/whatsapp", methods=["POST"])
+@login_required
+def whatsapp_violation():
+    """يجهّز رابط واتساب بالرسالة، ويسجّلها في السجل عند commit=true."""
+    d = request.json or {}
+    student_id = d.get("studentId", "")
+    tmpl_key   = d.get("template", "custom")
+    db = load_db()
+    student, class_name = _student_ctx(db, student_id)
+    if not student:
+        return jsonify({"error": "الطالب غير موجود"}), 404
+
+    which = d.get("phone") or "phone"
+    raw = student.get(which) or student.get("phone") or student.get("phone2") or ""
+    phone = normalize_phone(raw)
+    if not phone:
+        return jsonify({"error": "هذا الطالب ليس له رقم هاتف صالح"}), 400
+
+    opts = d.get("options") or build_options(tmpl_key, student, class_name, db,
+                                             {"message": d.get("message")})
+    text = whatsapp_text(opts)
+    if not text.strip():
+        return jsonify({"error": "الرسالة فارغة"}), 400
+    url = "https://wa.me/%s?text=%s" % (phone, quote(text))
+
+    if d.get("commit"):
+        rec = {"id": gen_id(), "studentId": student_id, "studentName": student["name"],
+               "studentEmail": student.get("email", ""), "studentPhone": phone,
+               "className": class_name, "channel": "whatsapp",
+               "message": opts.get("message") or opts.get("opening") or "",
+               "subject": opts.get("subject") or opts.get("badgeLabel") or "",
+               "template": tmpl_key, "templateLabel": opts.get("badgeLabel") or "—",
+               "sent": True, "error": None, "created_at": datetime.now().isoformat()}
+        db.setdefault("violations", []).append(rec)
+        db["violation_count"] = db.get("violation_count", 0) + 1
+        save_db(db)
+
+    return jsonify({"success": True, "url": url, "phone": phone, "text": text})
+
 # ====================== البلاغات ======================
 def _student_ctx(db, student_id):
     cm = {c["id"]: c for c in db["classes"]}
@@ -733,7 +847,7 @@ def send_violation():
         send_error = str(ex)
 
     rec = {"id": gen_id(), "studentId": student_id, "studentName": student["name"],
-           "studentEmail": student["email"], "className": class_name,
+           "studentEmail": student["email"], "className": class_name, "channel": "email",
            "message": opts.get("message") or opts.get("opening") or "",
            "subject": subject, "template": tmpl_key,
            "templateLabel": opts.get("badgeLabel") or "—",
@@ -753,12 +867,32 @@ def send_violation():
 def get_violations():
     return jsonify(load_db().get("violations", []))
 
+@app.route("/api/violations/<vid>", methods=["DELETE"])
+@login_required
+def delete_violation(vid):
+    db = load_db()
+    before = len(db.get("violations", []))
+    db["violations"] = [v for v in db.get("violations", []) if v.get("id") != vid]
+    if len(db["violations"]) == before:
+        return jsonify({"error": "السجل غير موجود"}), 404
+    save_db(db)
+    return jsonify({"success": True, "remaining": len(db["violations"])})
+
+@app.route("/api/violations/clear", methods=["POST"])
+@login_required
+def clear_violations():
+    db = load_db()
+    n = len(db.get("violations", []))
+    db["violations"] = []
+    save_db(db)
+    return jsonify({"success": True, "deleted": n})
+
 @app.route("/api/stats")
 @login_required
 def get_stats():
     db = load_db()
     return jsonify({"total_students": len(db["students"]), "total_classes": len(db["classes"]),
-                    "total_violations": db.get("violation_count", 0),
+                    "total_violations": len(db.get("violations", [])),
                     "avg_per_class": round(len(db["students"]) / len(db["classes"]), 1) if db["classes"] else 0})
 
 @app.route("/api/health")

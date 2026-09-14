@@ -127,7 +127,17 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 .stu.on{background:var(--accent-soft)}
 .stu .n{font-size:13px;font-weight:600}
 .stu .c{font-size:11.5px;color:var(--muted)}
-.stu .no-mail{font-size:11px;color:var(--red);margin-inline-start:auto}
+.stu .no-mail{font-size:11px;color:#b45309;margin-inline-start:auto}
+.btn-wa{background:#25d366;border-color:#25d366;color:#fff}
+.btn-wa:hover{filter:brightness(1.05)}
+.wa-phone{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+.wa-phone select{width:auto;padding:6px 10px;font-size:12px}
+.wa-box{background:#f4fbf7;border:1px solid #bfe8cf;border-radius:var(--r);padding:14px 16px;white-space:pre-wrap;font-size:13px;line-height:1.9;max-height:46vh;overflow:auto;direction:rtl}
+.wa-num{font-size:13px;color:var(--muted);margin-bottom:10px;direction:ltr;text-align:right;unicode-bidi:plaintext}
+.log .del{border:1px solid var(--line);background:#fff;border-radius:7px;width:30px;height:30px;cursor:pointer;color:#c3cbd4;flex-shrink:0}
+.log .del:hover{border-color:var(--red);color:var(--red)}
+.tag.wa{background:#e8f8ef;color:#128c4a}
+.tag.mail{background:var(--accent-soft);color:var(--accent)}
 .picked{background:var(--accent-soft);border:1px solid #cfe0ec;border-radius:var(--r);padding:12px 16px;margin-bottom:14px}
 .picked b{font-size:14px}
 .picked span{display:block;font-size:12px;color:var(--muted)}
@@ -458,9 +468,14 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
         </div>
         <iframe class="pv-frame" id="pv-frame" title="معاينة"></iframe>
         <div class="actions">
-          <button class="btn" id="send-btn" onclick="sendV()">إرسال الرسالة</button>
+          <button class="btn" id="send-btn" onclick="sendV()">📧 إرسال بريد</button>
+          <button class="btn btn-wa" id="wa-btn" onclick="sendWA()">💬 إرسال واتساب</button>
           <button class="btn btn-gray" onclick="openBigPreview()">تكبير المعاينة</button>
           <button class="btn btn-line" onclick="openSaveTmpl()">حفظ كقالب</button>
+        </div>
+        <div class="wa-phone" id="wa-phone" style="display:none">
+          رقم واتساب:
+          <select id="wa-which"></select>
         </div>
       </div>
     </div>
@@ -468,7 +483,10 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
 
   <!-- السجل -->
   <div class="pg" id="pg-log">
-    <div class="ph"><div><h1>سجل الرسائل</h1><p>كل ما تم إرساله من النظام</p></div><button class="btn btn-gray btn-sm" onclick="loadLog()">تحديث</button></div>
+    <div class="ph"><div><h1>سجل الرسائل</h1><p>كل ما تم إرساله من النظام</p></div><div style="display:flex;gap:8px">
+        <button class="btn btn-gray btn-sm" onclick="loadLog()">تحديث</button>
+        <button class="btn btn-gray btn-sm" id="clear-log-btn" onclick="clearLog()">مسح السجل كله</button>
+      </div></div>
     <div class="card"><div id="log-body"></div></div>
   </div>
 
@@ -540,6 +558,18 @@ mark{background:#fff3bf;color:inherit;border-radius:3px;padding:0 2px}
   </div>
   <p style="font-size:12px;color:var(--muted)">سيُحفظ كل ما كتبته الآن (الموضوع، الافتتاحية، النص، النقاط، الإجراء، الجدول، الخاتمة واللون) كقالب جاهز تستخدمه لاحقاً.</p>
   <div class="modal-act"><button class="btn btn-gray" onclick="closeSaveTmpl()">إلغاء</button><button class="btn" onclick="saveTmpl()">حفظ القالب</button></div>
+</div></div>
+
+<div class="ov" id="wa-modal"><div class="modal" style="max-width:520px">
+  <h3>💬 إرسال عبر واتساب</h3>
+  <div class="wa-num">إلى: <b id="wa-to"></b></div>
+  <div class="wa-box" id="wa-text"></div>
+  <p style="font-size:12px;color:var(--muted);margin-top:10px">سيُفتح واتساب والرسالة جاهزة على رقم ولي الأمر — اضغط إرسال هناك.</p>
+  <div class="modal-act">
+    <button class="btn btn-gray" onclick="closeWA()">إلغاء</button>
+    <button class="btn btn-gray" onclick="copyWA()">نسخ النص</button>
+    <a class="btn btn-wa" id="wa-open" href="#" target="_blank" rel="noopener" onclick="commitWA()">فتح واتساب</a>
+  </div>
 </div></div>
 
 <div id="toast"></div>
@@ -635,7 +665,7 @@ async function loadDash(){
     || '<div class="empty">لا توجد فصول</div>';
   const v=await api('/api/violations');
   const list=Array.isArray(v)?v.slice(-5).reverse():[];
-  document.getElementById('d-log').innerHTML=list.length?list.map(logRow).join(''):'<div class="empty">لم تُرسل أي رسالة بعد</div>';
+  document.getElementById('d-log').innerHTML=list.length?list.map(x=>logRow(x,false)).join(''):'<div class="empty">لم تُرسل أي رسالة بعد</div>';
 }
 
 /* ============ الفصول ============ */
@@ -776,7 +806,7 @@ function renderPicker(){
     <div class="stu${s.id===selStu?' on':''}" data-id="${s.id}" onclick="pickS('${s.id}')">
       <div><div class="n">${esc(s.name)}</div>
       <div class="c">${esc(s.class_name||'')} · ${s.email?esc(s.email):'بدون بريد'}</div></div>
-      ${s.email?'':'<span class="no-mail">لا يمكن الإرسال</span>'}
+      ${s.email?'':'<span class="no-mail">بدون بريد — واتساب فقط</span>'}
     </div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
 }
 async function pickS(id){
@@ -786,6 +816,13 @@ async function pickS(id){
   document.getElementById('v-name').textContent=s.name;
   document.getElementById('v-info').textContent=`${s.class_name||''} · ${s.email||'لا يوجد بريد مسجّل'}`;
   document.getElementById('v-picked').style.display='block';
+  const sel=$('wa-which'); const opts=[];
+  if(s.phone)  opts.push(`<option value="phone">${esc(s.phone)}</option>`);
+  if(s.phone2) opts.push(`<option value="phone2">${esc(s.phone2)}</option>`);
+  sel.innerHTML=opts.join('');
+  $('wa-phone').style.display=opts.length>1?'flex':'none';
+  $('wa-btn').disabled=!opts.length;
+  $('wa-btn').title=opts.length?'':'لا يوجد رقم هاتف لهذا الطالب';
   await loadDefaults();
 }
 function quickV(id){ pendingStu=id; go('violation'); }
@@ -881,9 +918,38 @@ async function sendV(){
   const r=await api('/api/violations',{method:'POST',body:JSON.stringify({
     studentId:selStu, template:selTmpl, options:OPT,
     appendName:document.getElementById('append-name').checked })});
-  b.textContent='إرسال الرسالة'; b.disabled=false;
-  if(r.success){ toast('تم إرسال الرسالة'); loadStats(); }
+  b.textContent='📧 إرسال بريد'; b.disabled=false;
+  if(r.success){ toast('تم إرسال البريد'); loadStats(); }
   else toast(r.error||'تعذّر الإرسال','err');
+}
+
+/* واتساب */
+let WA={url:'',phone:'',text:''};
+async function sendWA(){
+  readOpts();
+  if(!selStu){ toast('اختر الطالب أولاً','err'); return; }
+  const b=$('wa-btn'); b.innerHTML='<span class="spin"></span>جاري التجهيز'; b.disabled=true;
+  const r=await api('/api/violations/whatsapp',{method:'POST',body:JSON.stringify({
+    studentId:selStu, template:selTmpl, options:OPT, phone:$('wa-which').value||'phone', commit:false })});
+  b.innerHTML='💬 إرسال واتساب'; b.disabled=false;
+  if(r.error){ toast(r.error,'err'); return; }
+  WA=r;
+  $('wa-to').textContent='+'+r.phone;
+  $('wa-text').textContent=r.text;
+  $('wa-open').href=r.url;
+  $('wa-modal').classList.add('open');
+}
+function closeWA(){ $('wa-modal').classList.remove('open'); }
+function copyWA(){
+  navigator.clipboard?.writeText(WA.text).then(()=>toast('تم نسخ نص الرسالة')).catch(()=>toast('تعذّر النسخ','err'));
+}
+function commitWA(){
+  // الرابط يفتح واتساب مباشرة (بدون حظر النوافذ)، والتسجيل يتم في الخلفية
+  api('/api/violations/whatsapp',{method:'POST',body:JSON.stringify({
+    studentId:selStu, template:selTmpl, options:OPT, phone:$('wa-which').value||'phone', commit:true })})
+    .then(()=>{ loadStats(); }).catch(()=>{});
+  setTimeout(()=>{ closeWA(); toast('تم فتح واتساب — اضغط إرسال هناك'); }, 300);
+  return true;
 }
 
 /* حفظ كقالب */
@@ -940,18 +1006,46 @@ function applyBrand(){
 }
 
 /* ============ السجل ============ */
-function logRow(v){
-  return `<div class="log">
-    <div class="d">${new Date(v.created_at).toLocaleDateString('ar-EG',{day:'2-digit',month:'short'})}</div>
-    <div class="b"><div class="n">${esc(v.studentName)} <span style="font-weight:400;color:var(--muted);font-size:12px">· ${esc(v.className)}</span></div>
-    <div class="m">${esc((v.subject||v.message||'').slice(0,110))}</div></div>
-    <div style="text-align:left;flex-shrink:0"><span class="tag ${v.sent?'ok':'bad'}">${v.sent?'تم الإرسال':'فشل'}</span>
-    <div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(v.templateLabel||'')}</div></div></div>`;
+function logRow(v, canDelete){
+  const wa=v.channel==='whatsapp';
+  const chan=wa?'<span class="tag wa">💬 واتساب</span>':'<span class="tag mail">📧 بريد</span>';
+  const to=wa?('+'+esc(v.studentPhone||'')):esc(v.studentEmail||'');
+  return `<div class="log" data-id="${v.id}">
+    <div class="d">${new Date(v.created_at).toLocaleDateString('ar-EG',{day:'2-digit',month:'short'})}<br>
+      <span style="font-size:10.5px">${new Date(v.created_at).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
+    <div class="b">
+      <div class="n">${esc(v.studentName)} <span style="font-weight:400;color:var(--muted);font-size:12px">· ${esc(v.className)}</span></div>
+      <div class="m">${esc((v.subject||v.message||'').slice(0,110))}</div>
+      <div class="m" style="font-size:11px;direction:ltr;text-align:right;unicode-bidi:plaintext">${to}</div>
+    </div>
+    <div style="text-align:left;flex-shrink:0">
+      ${chan} <span class="tag ${v.sent?'ok':'bad'}">${v.sent?(wa?'تم الفتح':'تم الإرسال'):'فشل'}</span>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(v.templateLabel||'')}</div>
+    </div>
+    ${canDelete?`<button class="del" title="حذف من السجل" onclick="delLog('${v.id}')">✕</button>`:''}
+  </div>`;
 }
 async function loadLog(){
   const v=await api('/api/violations');
   const list=Array.isArray(v)?v.slice().reverse():[];
-  document.getElementById('log-body').innerHTML=list.length?list.map(logRow).join(''):'<div class="empty">لا توجد رسائل بعد</div>';
+  $('log-body').innerHTML=list.length?list.map(x=>logRow(x,true)).join(''):'<div class="empty">لا توجد رسائل بعد</div>';
+  $('clear-log-btn').style.display=list.length?'':'none';
+}
+async function delLog(id){
+  const row=document.querySelector(`#log-body .log[data-id="${id}"]`);
+  const name=row?row.querySelector('.n').textContent.trim():'';
+  if(!confirm(`حذف هذه الرسالة من السجل؟\n${name}`)) return;
+  const r=await api('/api/violations/'+id,{method:'DELETE'});
+  if(r.error){ toast(r.error,'err'); return; }
+  if(row) row.remove();
+  toast('تم الحذف من السجل'); loadStats();
+  if(!document.querySelector('#log-body .log')) loadLog();
+}
+async function clearLog(){
+  if(!confirm('مسح السجل بالكامل؟ لا يمكن التراجع.')) return;
+  const r=await api('/api/violations/clear',{method:'POST'});
+  if(r.error){ toast(r.error,'err'); return; }
+  toast(`تم مسح ${r.deleted} رسالة`); loadLog(); loadStats();
 }
 
 /* ============ البدء ============ */
